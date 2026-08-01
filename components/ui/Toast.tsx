@@ -8,7 +8,13 @@ export interface ToastProps {
   message: ReactNode;
   variant?: ToastVariant;
   onDismiss?: () => void;
-  /** Duration in ms before auto-dismiss. 0 = no auto-dismiss. Default 5000. */
+  /**
+   * Duration in ms before auto-dismiss.
+   * Defaults to 0 (non-expiring) so screen readers have unlimited time to
+   * read the message. Pass a positive value to enable auto-dismiss only when
+   * you are certain the content is non-critical and the dismiss button is
+   * still reachable.
+   */
   duration?: number;
 }
 
@@ -41,14 +47,15 @@ const variantConfig: Record<
 /**
  * Toast notification.
  * - Uses role="status" (polite) for info/ok; role="alert" (assertive) for warn/danger.
- * - Non-colour status: icon glyph + aria-label convey meaning.
- * - Auto-dismisses after `duration` ms unless 0.
+ * - Non-colour status: icon glyph + sr-only label convey meaning independently of colour.
+ * - Does not auto-dismiss by default (duration=0); pass a positive duration only when
+ *   the content is non-critical and dismissal will not cause loss of information.
  */
 export function Toast({
   message,
   variant = "info",
   onDismiss,
-  duration = 5000,
+  duration = 0,
 }: ToastProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cfg = variantConfig[variant];

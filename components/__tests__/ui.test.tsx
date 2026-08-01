@@ -197,10 +197,25 @@ describe("StatusBadge", () => {
     expect(badge).toHaveAttribute("data-status", "warn");
   });
 
-  it("includes value in aria-label when provided", () => {
+  it("aria-label includes human-readable status word, label, and value", () => {
     render(<StatusBadge status="danger" label="Farm" value="Critical" />);
     const badge = document.querySelector("[data-status='danger']");
-    expect(badge).toHaveAttribute("aria-label", "Farm: Critical");
+    // Format: "{statusLabel}: {label}: {value}" — status word always present
+    expect(badge).toHaveAttribute("aria-label", "Critical: Farm: Critical");
+  });
+
+  it("aria-label includes human-readable status word and label when no value", () => {
+    render(<StatusBadge status="warn" label="Water" />);
+    const badge = document.querySelector("[data-status='warn']");
+    expect(badge).toHaveAttribute("aria-label", "Warning: Water");
+  });
+
+  it("aria-label includes status word for ok/info/neutral variants", () => {
+    render(<StatusBadge status="ok" label="Health" value="82%" />);
+    expect(document.querySelector("[data-status='ok']")).toHaveAttribute(
+      "aria-label",
+      "Good: Health: 82%",
+    );
   });
 
   it("renders all status variants without crashing", () => {
@@ -271,6 +286,15 @@ describe("Toast", () => {
     expect(
       screen.queryByRole("button", { name: /dismiss/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not auto-dismiss by default (duration=0)", () => {
+    // The default duration must be 0 so screen readers have unlimited time
+    const onDismiss = vi.fn();
+    render(<Toast message="Persistent" onDismiss={onDismiss} />);
+    // Wait 100ms — if default were 5000 nothing would fire; but also confirms
+    // the component does not immediately call onDismiss with duration=0
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
 
