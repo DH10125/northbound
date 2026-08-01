@@ -24,9 +24,7 @@ export default function RootLayout({
         <LiveRegion />
 
         {/* Responsive shell: fluid at 320px, constrained at max-width */}
-        <div className="min-h-[100svh] flex flex-col">
-          {children}
-        </div>
+        <div className="min-h-[100svh] flex flex-col">{children}</div>
       </body>
     </html>
   );

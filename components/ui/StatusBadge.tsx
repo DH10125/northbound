@@ -56,9 +56,7 @@ export function StatusBadge({ status, label, value }: StatusBadgeProps) {
     >
       <span aria-hidden="true">
         {label}
-        {value !== undefined && (
-          <span className="ml-1 font-bold">{value}</span>
-        )}
+        {value !== undefined && <span className="ml-1 font-bold">{value}</span>}
       </span>
     </span>
   );

@@ -88,10 +88,7 @@ export default function Home() {
           </div>
         </section>
 
-        <p
-          className="text-xs pt-4"
-          style={{ color: "var(--text-tertiary)" }}
-        >
+        <p className="text-xs pt-4" style={{ color: "var(--text-tertiary)" }}>
           Early development — nothing to play yet.
         </p>
       </div>

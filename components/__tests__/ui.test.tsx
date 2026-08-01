@@ -69,9 +69,9 @@ describe("Button", () => {
 describe("Dialog", () => {
   // jsdom does not implement showModal/close, so we stub them.
   function renderDialog(
-    props: Partial<
-      import("../ui/Dialog").DialogProps
-    > & { open?: boolean } = {},
+    props: Partial<import("../ui/Dialog").DialogProps> & {
+      open?: boolean;
+    } = {},
   ) {
     const onClose = vi.fn();
     const result = render(
