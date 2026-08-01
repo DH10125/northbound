@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useId, type ReactNode } from "react";
 import { Button } from "./Button";
 
 export interface DialogProps {
@@ -19,6 +19,7 @@ export interface DialogProps {
  * - Escape key closes.
  * - Announces title via aria-labelledby and description via aria-describedby.
  * - No animations that gate input; motion respects prefers-reduced-motion.
+ * - IDs generated with React useId() for stable SSR/hydration-safe markup.
  */
 export function Dialog({
   open,
@@ -29,10 +30,9 @@ export function Dialog({
   closeLabel = "Close",
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = useRef(
-    `dialog-title-${Math.random().toString(36).slice(2)}`,
-  );
-  const descId = useRef(`dialog-desc-${Math.random().toString(36).slice(2)}`);
+  const baseId = useId();
+  const titleId = `${baseId}-title`;
+  const descId = `${baseId}-desc`;
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -58,8 +58,8 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
-      aria-labelledby={titleId.current}
-      aria-describedby={description ? descId.current : undefined}
+      aria-labelledby={titleId}
+      aria-describedby={description ? descId : undefined}
       className={[
         "backdrop:bg-black/60 backdrop:backdrop-blur-sm",
         "bg-[var(--surface-raised)] text-[var(--text-primary)]",
@@ -75,7 +75,7 @@ export function Dialog({
     >
       <div className="flex items-start justify-between gap-4">
         <h2
-          id={titleId.current}
+          id={titleId}
           className="text-[length:var(--text-xl)] font-semibold text-[var(--text-primary)] leading-snug"
         >
           {title}
@@ -93,7 +93,7 @@ export function Dialog({
 
       {description && (
         <p
-          id={descId.current}
+          id={descId}
           className="text-[length:var(--text-sm)] text-[var(--text-secondary)]"
         >
           {description}

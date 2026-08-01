@@ -14,5 +14,4 @@ export { SkipNav } from "./SkipNav";
 
 export { VisuallyHidden } from "./VisuallyHidden";
 
-export { LiveRegion, useLiveRegion } from "./LiveRegion";
-export type { LiveRegionHandle } from "./LiveRegion";
+export { LiveRegion, useLiveRegion, LIVE_REGION_ID } from "./LiveRegion";

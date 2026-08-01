@@ -1,18 +1,21 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
+
+/** Stable DOM id for the singleton live region rendered in app/layout.tsx */
+export const LIVE_REGION_ID = "nb-live-region";
 
 /**
- * LiveRegion — an off-screen ARIA live region for announcing dynamic
- * content to screen readers (e.g., turn results, state changes).
+ * LiveRegion — off-screen ARIA live region for announcing dynamic content to
+ * screen readers (e.g. turn results, state changes).
  *
- * Usage:
- *   const ref = useLiveRegion();
- *   ref.announce("You found 3 litres of water.");
+ * Render exactly once, in the root layout. Use useLiveRegion() anywhere in the
+ * tree to obtain an `announce` function that writes into this element.
  */
 export function LiveRegion({ children }: { children?: ReactNode }) {
   return (
     <div
+      id={LIVE_REGION_ID}
       aria-live="polite"
       aria-atomic="true"
       aria-relevant="additions text"
@@ -24,21 +27,22 @@ export function LiveRegion({ children }: { children?: ReactNode }) {
   );
 }
 
-export type LiveRegionHandle = { announce: (msg: string) => void };
-
+/**
+ * useLiveRegion — returns an `announce(msg)` function that writes into the
+ * global LiveRegion element rendered by the root layout.
+ *
+ * Clears the element first so the same message can be announced twice in a row.
+ */
 export function useLiveRegion() {
-  const ref = useRef<HTMLDivElement>(null);
-
-  function announce(msg: string) {
-    const el = ref.current;
+  const announce = useCallback((msg: string) => {
+    const el = document.getElementById(LIVE_REGION_ID);
     if (!el) return;
-    // Clear then re-set to guarantee announcement even if message repeats
+    // Clear then re-set guarantees AT notices the change even for repeated text
     el.textContent = "";
-    // Defer to next microtask so screen readers notice the change
     setTimeout(() => {
       el.textContent = msg;
     }, 50);
-  }
+  }, []);
 
-  return { ref, announce };
+  return { announce };
 }
