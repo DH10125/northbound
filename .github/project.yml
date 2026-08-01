@@ -1,0 +1,35 @@
+repository:
+  name: northbound
+  description: "A journey against the current — an original browser survival adventure from Pensacola to Butternut."
+  homepage: ""
+  visibility: public
+milestones:
+  - {title: "M0 — Foundation", description: "Repository and deterministic engine foundation"}
+  - {title: "M1 — Vertical Slice", description: "Playable Pensacola tutorial"}
+  - {title: "M2 — Survival Systems", description: "Complete systemic gameplay"}
+  - {title: "M3 — Journey Content", description: "Route chapters and narrative content"}
+  - {title: "M4 — Complete Game", description: "Finale, saves, settings, and endings"}
+  - {title: "M5 — v1.0 Release", description: "Polish, balance, QA, and authorized Vercel release"}
+labels:
+  - {name: "claude-ready", color: "5319e7", description: "Self-contained and ready for a coding agent"}
+  - {name: "status: ready", color: "0e8a16", description: "Dependencies complete and ready"}
+  - {name: "status: blocked", color: "b60205", description: "Waiting on a dependency or decision"}
+  - {name: "priority: critical", color: "b60205", description: "Release or foundation critical"}
+  - {name: "priority: high", color: "d93f0b", description: "High priority"}
+  - {name: "priority: normal", color: "fbca04", description: "Normal priority"}
+  - {name: "type: infrastructure", color: "0052cc", description: "Tooling, CI, or repository"}
+  - {name: "type: engine", color: "1d76db", description: "Simulation and game rules"}
+  - {name: "type: ui", color: "c5def5", description: "Player-facing interface"}
+  - {name: "type: content", color: "bfd4f2", description: "Authored narrative or world data"}
+  - {name: "type: testing", color: "d4c5f9", description: "Verification and quality"}
+  - {name: "type: release", color: "006b75", description: "Release work"}
+  - {name: "area: core", color: "0366d6", description: "Core simulation"}
+  - {name: "area: narrative", color: "7057ff", description: "Narrative and content system"}
+  - {name: "area: accessibility", color: "008672", description: "Inclusive design"}
+  - {name: "area: persistence", color: "0e8a16", description: "Save and migration"}
+  - {name: "area: deployment", color: "000000", description: "Vercel and release"}
+project:
+  title: "Northbound v1.0"
+  views: ["Roadmap", "By milestone", "By area"]
+  status_options: ["Backlog", "Ready", "In progress", "In review", "Done"]
+
