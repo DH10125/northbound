@@ -85,14 +85,3 @@ export type MeterChangedEvent = z.infer<typeof MeterChangedEventSchema>;
 export type TravelAdvancedEvent = z.infer<typeof TravelAdvancedEventSchema>;
 export type CommandRejectedEvent = z.infer<typeof CommandRejectedEventSchema>;
 
-// ── Journal ───────────────────────────────────────────────────────────────────
-
-/**
- * A journaled turn: the turn index (0-based), the command payload (opaque
- * string for storage), and the domain events emitted.
- */
-export type TurnJournalEntry = {
-  turn: number;
-  commandType: string;
-  events: DomainEvent[];
-};

@@ -17,44 +17,54 @@ import { z } from "zod";
  * Advance the party along the route by one travel segment.
  * `turnsToTravel` defaults to 1 if omitted; must be 1–8.
  */
-export const TravelCommandSchema = z.object({
-  type: z.literal("TRAVEL"),
-  turnsToTravel: z.number().int().min(1).max(8).default(1),
-});
+export const TravelCommandSchema = z
+  .object({
+    type: z.literal("TRAVEL"),
+    turnsToTravel: z.number().int().min(1).max(8).default(1),
+  })
+  .strict();
 
 /**
  * Rest in place for a number of hours (1–12).
  */
-export const RestCommandSchema = z.object({
-  type: z.literal("REST"),
-  hours: z.number().int().min(1).max(12),
-});
+export const RestCommandSchema = z
+  .object({
+    type: z.literal("REST"),
+    hours: z.number().int().min(1).max(12),
+  })
+  .strict();
 
 /**
  * Choose an option in an active event.
  */
-export const ChooseEventOptionCommandSchema = z.object({
-  type: z.literal("CHOOSE_EVENT_OPTION"),
-  eventId: z.string().min(1),
-  optionId: z.string().min(1),
-});
+export const ChooseEventOptionCommandSchema = z
+  .object({
+    type: z.literal("CHOOSE_EVENT_OPTION"),
+    eventId: z.string().min(1),
+    optionId: z.string().min(1),
+  })
+  .strict();
 
 /**
  * Consume an item from inventory.
  * `quantity` defaults to 1 if omitted.
  */
-export const UseItemCommandSchema = z.object({
-  type: z.literal("USE_ITEM"),
-  instanceId: z.string().min(1),
-  quantity: z.number().int().min(1).default(1),
-});
+export const UseItemCommandSchema = z
+  .object({
+    type: z.literal("USE_ITEM"),
+    instanceId: z.string().min(1),
+    quantity: z.number().int().min(1).default(1),
+  })
+  .strict();
 
 /**
  * Scavenge the current location for resources.
  */
-export const ScavengeCommandSchema = z.object({
-  type: z.literal("SCAVENGE"),
-});
+export const ScavengeCommandSchema = z
+  .object({
+    type: z.literal("SCAVENGE"),
+  })
+  .strict();
 
 // ── Discriminated union ───────────────────────────────────────────────────────
 

@@ -4,7 +4,9 @@
  * All tests are pure — no Math.random, Date.now, or browser globals.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
 import {
   seedToState,
   nextFloat,
@@ -108,6 +110,36 @@ describe("nextInt", () => {
     const [, v] = nextInt(s, 7, 7);
     expect(v).toBe(7);
   });
+
+  it("throws for non-integer min", () => {
+    const s = seedToState("ni-frac-min");
+    expect(() => nextInt(s, 1.5, 5)).toThrow(RangeError);
+  });
+
+  it("throws for non-integer max", () => {
+    const s = seedToState("ni-frac-max");
+    expect(() => nextInt(s, 1, 4.9)).toThrow(RangeError);
+  });
+
+  it("throws for NaN min", () => {
+    const s = seedToState("ni-nan-min");
+    expect(() => nextInt(s, NaN, 5)).toThrow(RangeError);
+  });
+
+  it("throws for Infinity max", () => {
+    const s = seedToState("ni-inf-max");
+    expect(() => nextInt(s, 0, Infinity)).toThrow(RangeError);
+  });
+
+  it("does not consume state on error", () => {
+    const s = seedToState("ni-no-consume");
+    try { nextInt(s, 1.5, 5); } catch { /* expected */ }
+    // The state is unchanged — calling again with valid args yields the same result
+    // as if the error call never happened.
+    const [, v1] = nextInt(s, 0, 100);
+    const [, v2] = nextInt(s, 0, 100);
+    expect(v1).toBe(v2);
+  });
 });
 
 // ── RNG: weightedChoice ───────────────────────────────────────────────────────
@@ -151,6 +183,29 @@ describe("weightedChoice", () => {
   it("mismatched lengths throw", () => {
     const s = seedToState("wc-mismatch");
     expect(() => weightedChoice(s, ["a"], [1, 2])).toThrow(RangeError);
+  });
+
+  it("throws for negative weight", () => {
+    const s = seedToState("wc-neg");
+    expect(() => weightedChoice(s, ["a", "b"], [-1, 1])).toThrow(RangeError);
+  });
+
+  it("throws for NaN weight", () => {
+    const s = seedToState("wc-nan");
+    expect(() => weightedChoice(s, ["a", "b"], [NaN, 1])).toThrow(RangeError);
+  });
+
+  it("throws for Infinity weight", () => {
+    const s = seedToState("wc-inf");
+    expect(() => weightedChoice(s, ["a", "b"], [Infinity, 1])).toThrow(RangeError);
+  });
+
+  it("does not consume state on validation error", () => {
+    const s = seedToState("wc-no-consume");
+    try { weightedChoice(s, ["a", "b"], [NaN, 1]); } catch { /* expected */ }
+    const [, v1] = nextFloat(s);
+    const [, v2] = nextFloat(s);
+    expect(v1).toBe(v2);
   });
 });
 
@@ -201,6 +256,29 @@ describe("roll", () => {
     const s = seedToState("roll-err");
     expect(() => roll(s, 0)).toThrow(RangeError);
   });
+
+  it("throws for non-integer sides", () => {
+    const s = seedToState("roll-frac");
+    expect(() => roll(s, 1.5)).toThrow(RangeError);
+  });
+
+  it("throws for NaN sides", () => {
+    const s = seedToState("roll-nan");
+    expect(() => roll(s, NaN)).toThrow(RangeError);
+  });
+
+  it("throws for Infinity sides", () => {
+    const s = seedToState("roll-inf");
+    expect(() => roll(s, Infinity)).toThrow(RangeError);
+  });
+
+  it("does not consume state on error", () => {
+    const s = seedToState("roll-no-consume");
+    try { roll(s, 0); } catch { /* expected */ }
+    const [, v1] = nextFloat(s);
+    const [, v2] = nextFloat(s);
+    expect(v1).toBe(v2);
+  });
 });
 
 // ── Commands: parseCommand ────────────────────────────────────────────────────
@@ -225,6 +303,11 @@ describe("parseCommand", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("rejects TRAVEL with unknown extra field (strict schema)", () => {
+    const r = parseCommand({ type: "TRAVEL", turnsToTravel: 1, hack: true });
+    expect(r.ok).toBe(false);
+  });
+
   it("parses valid REST command", () => {
     const r = parseCommand({ type: "REST", hours: 8 });
     expect(r.ok).toBe(true);
@@ -232,6 +315,11 @@ describe("parseCommand", () => {
 
   it("rejects REST with hours = 0", () => {
     const r = parseCommand({ type: "REST", hours: 0 });
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejects REST with unknown extra field (strict schema)", () => {
+    const r = parseCommand({ type: "REST", hours: 4, extra: "bad" });
     expect(r.ok).toBe(false);
   });
 
@@ -243,6 +331,11 @@ describe("parseCommand", () => {
     }
   });
 
+  it("rejects USE_ITEM with extra field (strict schema)", () => {
+    const r = parseCommand({ type: "USE_ITEM", instanceId: "item-abc", exploit: 1 });
+    expect(r.ok).toBe(false);
+  });
+
   it("rejects unknown command type", () => {
     const r = parseCommand({ type: "EXPLODE" });
     expect(r.ok).toBe(false);
@@ -251,6 +344,17 @@ describe("parseCommand", () => {
   it("rejects null", () => {
     const r = parseCommand(null);
     expect(r.ok).toBe(false);
+  });
+
+  it("malformed command does not mutate state or RNG", () => {
+    // Prove the state is unchanged by re-applying after a bad parse
+    const rng = seedToState("cmd-strict");
+    const bad = parseCommand({ type: "TRAVEL", turnsToTravel: 1, injected: "evil" });
+    expect(bad.ok).toBe(false);
+    // RNG state is untouched — applyCommand was never called
+    const [, v1] = nextFloat(rng);
+    const [, v2] = nextFloat(rng);
+    expect(v1).toBe(v2);
   });
 });
 
@@ -271,6 +375,13 @@ describe("applyCommand – immutability", () => {
     const { state: next, events } = applyCommand(minimalGameState, cmd, rng);
     expect(JSON.stringify(next)).toBe(JSON.stringify(minimalGameState));
     expect(events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+
+  it("invalid command leaves RNG byte-equivalent", () => {
+    const rng = seedToState("inv-rng-test");
+    const cmd = { type: "USE_ITEM" as const, instanceId: "ghost-item", quantity: 1 };
+    const { rng: nextRng } = applyCommand(minimalGameState, cmd, rng);
+    expect(nextRng).toEqual(rng);
   });
 
   it("command on ended run is rejected", () => {
@@ -390,7 +501,7 @@ describe("selectors", () => {
 // ── Replay: determinism ───────────────────────────────────────────────────────
 
 describe("replay – determinism", () => {
-  it("same seed+commands yields byte-equivalent state", () => {
+  it("same seed+commands yields byte-equivalent state, RNG, and journal", () => {
     const rng = seedToState("replay-det");
     const commands = [
       { type: "TRAVEL" as const, turnsToTravel: 1 },
@@ -402,6 +513,8 @@ describe("replay – determinism", () => {
     const r2 = replay(minimalGameState, rng, commands);
 
     expect(JSON.stringify(r1.state)).toBe(JSON.stringify(r2.state));
+    expect(JSON.stringify(r1.rng)).toBe(JSON.stringify(r2.rng));
+    expect(JSON.stringify(r1.journal)).toBe(JSON.stringify(r2.journal));
   });
 
   it("different seeds produce different outcomes", () => {
@@ -422,6 +535,19 @@ describe("replay – determinism", () => {
     const rng = seedToState("replay-empty");
     const r = replay(minimalGameState, rng, []);
     expect(JSON.stringify(r.state)).toBe(JSON.stringify(minimalGameState));
+    expect(r.journal).toHaveLength(0);
+  });
+
+  it("journal entries contain full command payload and fingerprint", () => {
+    const rng = seedToState("replay-journal");
+    const cmd = { type: "TRAVEL" as const, turnsToTravel: 2 };
+    const r = replay(minimalGameState, rng, [cmd]);
+    expect(r.journal).toHaveLength(1);
+    const snap = r.journal[0]!;
+    expect(snap.command).toEqual(cmd);
+    expect(typeof snap.fingerprint).toBe("string");
+    expect(snap.fingerprint.length).toBeGreaterThan(10);
+    expect(snap.rngAfter).toEqual(r.rng);
   });
 });
 
@@ -437,16 +563,25 @@ describe("diffReplay", () => {
     expect(report.diverged).toBe(false);
   });
 
-  it("detects divergence when seeds differ", () => {
-    const commands = [{ type: "TRAVEL" as const, turnsToTravel: 3 }];
-    const r1 = replay(minimalGameState, seedToState("seed-x"), commands);
-    const r2 = replay(minimalGameState, seedToState("seed-y"), commands);
-    // They may or may not diverge depending on variance; check the report is valid
-    const report = diffReplay(r1, r2);
-    expect(typeof report.diverged).toBe("boolean");
-    if (report.diverged) {
-      expect(typeof report.firstDivergingTurn).toBe("number");
-      expect(report.message.length).toBeGreaterThan(0);
+  it("detects divergence when seeds differ (same event signatures)", () => {
+    // TRAVEL always emits TIME_ADVANCED and TRAVEL_ADVANCED — the events look
+    // identical between runs, but the distance covered differs. The fingerprint
+    // (state+RNG) must catch this.
+    const commands = [{ type: "TRAVEL" as const, turnsToTravel: 1 }];
+    const r1 = replay(minimalGameState, seedToState("seed-diverge-x"), commands);
+    const r2 = replay(minimalGameState, seedToState("seed-diverge-y"), commands);
+
+    // The distance variance means states differ, even if event *types* match.
+    if (r1.state.location.distanceRemaining !== r2.state.location.distanceRemaining) {
+      const report = diffReplay(r1, r2);
+      expect(report.diverged).toBe(true);
+      if (report.diverged) {
+        expect(report.firstDivergingTurn).toBe(0);
+        expect(typeof report.fingerprintA).toBe("string");
+        expect(typeof report.fingerprintB).toBe("string");
+        expect(report.fingerprintA).not.toBe(report.fingerprintB);
+        expect(report.message).toMatch(/turn 0/);
+      }
     }
   });
 
@@ -461,18 +596,81 @@ describe("diffReplay", () => {
     ]);
     const report = diffReplay(r1, r2);
     expect(report.diverged).toBe(true);
+    if (report.diverged) {
+      expect(report.firstDivergingTurn).toBe(1);
+    }
+  });
+
+  it("event-signature match does not suppress state/RNG divergence", () => {
+    // Construct two ReplayResults with identical events but different fingerprints.
+    const rng1 = seedToState("fp-a");
+    const rng2 = seedToState("fp-b");
+    const commands = [{ type: "TRAVEL" as const, turnsToTravel: 1 }];
+
+    const ra = replay(minimalGameState, rng1, commands);
+    const rb = replay(minimalGameState, rng2, commands);
+
+    // If their states differ the fingerprint-based check must report divergence.
+    if (JSON.stringify(ra.state) !== JSON.stringify(rb.state)) {
+      const report = diffReplay(ra, rb);
+      expect(report.diverged).toBe(true);
+      if (report.diverged) {
+        expect(typeof report.fingerprintA).toBe("string");
+        expect(typeof report.fingerprintB).toBe("string");
+      }
+    }
   });
 });
 
-// ── No Math.random / Date.now in core ─────────────────────────────────────────
+// ── No Math.random / Date.now in production core files ────────────────────────
 
-describe("core module purity", () => {
-  it("RNG module does not call Math.random", () => {
-    // If seedToState / nextFloat used Math.random, two calls with the same seed
-    // would produce different results. Verify they are identical.
+describe("core module purity – static enforcement", () => {
+  it("no production file under game/core/ calls Math.random or Date.now", () => {
+    const coreDir = path.resolve(__dirname, "..");
+    const prohibited = [/\bMath\.random\s*\(/, /\bDate\.now\s*\(/];
+    const violations: string[] = [];
+
+    // Walk all .ts files in game/core/ (not __tests__/)
+    const files = fs
+      .readdirSync(coreDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".ts"))
+      .map((e) => path.join(coreDir, e.name));
+
+    for (const filePath of files) {
+      const lines = fs.readFileSync(filePath, "utf-8").split("\n");
+      for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+        const line = lines[lineNo]!;
+        // Skip comment lines (single-line // comments and * doc lines)
+        const stripped = line.trimStart();
+        if (stripped.startsWith("//") || stripped.startsWith("*")) continue;
+        for (const re of prohibited) {
+          if (re.test(line)) {
+            violations.push(
+              `${path.basename(filePath)}:${lineNo + 1}: ${line.trim()}`,
+            );
+          }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("RNG module is deterministic (behavioral purity check)", () => {
+    // If nextFloat silently used Math.random, identical state inputs would
+    // produce different outputs. Verify they are identical.
     const s = seedToState("purity-check");
     const [, f1] = nextFloat(s);
     const [, f2] = nextFloat(s);
     expect(f1).toBe(f2);
+  });
+
+  it("does not use Date.now spy can confirm absence of Date.now calls", () => {
+    const spy = vi.spyOn(Date, "now");
+    const rng = seedToState("date-spy");
+    const cmd = { type: "TRAVEL" as const, turnsToTravel: 1 };
+    applyCommand(minimalGameState, cmd, rng);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

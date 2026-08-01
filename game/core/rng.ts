@@ -8,6 +8,9 @@
  *
  * All public helpers are pure functions that accept and return RngState so
  * callers can sequence calls without side effects.
+ *
+ * Input-validation errors are thrown **before** any state is consumed so the
+ * caller's RNG state is guaranteed to be unmodified on error.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -67,8 +70,7 @@ function xoshiro128ss(state: RngState): [RngState, number] {
   const [s0, s1, s2, s3] = state;
 
   // Result is s1 * 5, rotated left 7, multiplied by 9.
-  const result =
-    Math.imul(rotl(Math.imul(s1, 5) >>> 0, 7), 9) >>> 0;
+  const result = Math.imul(rotl(Math.imul(s1, 5) >>> 0, 7), 9) >>> 0;
 
   const t = (s1 << 9) >>> 0;
 
@@ -101,35 +103,69 @@ export function nextFloat(state: RngState): [RngState, number] {
 
 /**
  * Return an integer in [min, max] (inclusive) and the next RNG state.
- * Requires min <= max.
+ *
+ * Validation (throws **before** consuming state):
+ *   - min and max must be finite integers.
+ *   - min must be <= max.
+ *   - Range (max - min + 1) must not exceed Number.MAX_SAFE_INTEGER.
  */
 export function nextInt(
   state: RngState,
   min: number,
   max: number,
 ): [RngState, number] {
-  if (min > max) throw new RangeError(`nextInt: min (${min}) > max (${max})`);
+  if (!Number.isFinite(min) || !Number.isInteger(min)) {
+    throw new RangeError(`nextInt: min must be a finite integer, got ${min}`);
+  }
+  if (!Number.isFinite(max) || !Number.isInteger(max)) {
+    throw new RangeError(`nextInt: max must be a finite integer, got ${max}`);
+  }
+  if (min > max) {
+    throw new RangeError(`nextInt: min (${min}) > max (${max})`);
+  }
+  const range = max - min + 1;
+  if (range > Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(`nextInt: range (${range}) exceeds MAX_SAFE_INTEGER`);
+  }
   const [next, f] = nextFloat(state);
-  return [next, min + Math.floor(f * (max - min + 1))];
+  return [next, min + Math.floor(f * range)];
 }
 
 /**
  * Weighted random choice: pick one item from `items` according to `weights`.
- * Weights are non-negative numbers; they need not sum to 1.
+ * Weights are non-negative finite numbers; they need not sum to 1.
  * Returns the chosen item and the next RNG state.
+ *
+ * Validation (throws **before** consuming state):
+ *   - items must be non-empty.
+ *   - items and weights must have the same length.
+ *   - All weights must be finite and >= 0.
+ *   - Total weight must be > 0.
  */
 export function weightedChoice<T>(
   state: RngState,
   items: ReadonlyArray<T>,
   weights: ReadonlyArray<number>,
 ): [RngState, T] {
-  if (items.length === 0) throw new RangeError("weightedChoice: empty items");
+  if (items.length === 0) {
+    throw new RangeError("weightedChoice: empty items");
+  }
   if (items.length !== weights.length) {
     throw new RangeError("weightedChoice: items and weights length mismatch");
   }
+  for (let i = 0; i < weights.length; i++) {
+    const w = weights[i]!;
+    if (!Number.isFinite(w) || w < 0) {
+      throw new RangeError(
+        `weightedChoice: weight at index ${i} must be a finite non-negative number, got ${w}`,
+      );
+    }
+  }
 
   const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) throw new RangeError("weightedChoice: total weight <= 0");
+  if (total <= 0) {
+    throw new RangeError("weightedChoice: total weight <= 0");
+  }
 
   const [next, f] = nextFloat(state);
   let threshold = f * total;
@@ -167,9 +203,16 @@ export function shuffle<T>(
 }
 
 /**
- * Roll a d-sided die (1..d) and return result + next state.
+ * Roll a d-sided die (1..sides) and return result + next state.
+ *
+ * Validation (throws **before** consuming state):
+ *   - sides must be a finite positive integer.
  */
 export function roll(state: RngState, sides: number): [RngState, number] {
-  if (sides < 1) throw new RangeError(`roll: sides must be >= 1, got ${sides}`);
+  if (!Number.isFinite(sides) || !Number.isInteger(sides) || sides < 1) {
+    throw new RangeError(
+      `roll: sides must be a finite positive integer, got ${sides}`,
+    );
+  }
   return nextInt(state, 1, sides);
 }
