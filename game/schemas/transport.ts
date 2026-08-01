@@ -7,7 +7,11 @@
  */
 
 import { z } from "zod";
-import { ItemInstanceIdSchema, TransportIdSchema, TransportInstanceIdSchema } from "./ids";
+import {
+  ItemInstanceIdSchema,
+  TransportIdSchema,
+  TransportInstanceIdSchema,
+} from "./ids";
 
 export const TransportModeSchema = z.enum([
   "foot",

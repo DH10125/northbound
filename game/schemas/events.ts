@@ -13,7 +13,9 @@ export const EventHistoryEntrySchema = z.object({
   /** In-world hour when this occurred. */
   resolvedAtHour: z.number().min(0),
   /** Whether a skill check occurred and its result. */
-  skillCheckResult: z.enum(["critical-failure", "failure", "success", "critical-success"]).optional(),
+  skillCheckResult: z
+    .enum(["critical-failure", "failure", "success", "critical-success"])
+    .optional(),
   /** Flags set by this event. */
   flagsSet: z.array(z.string()),
 });

@@ -170,7 +170,8 @@ export const populatedGameState: GameState = {
         items: [
           {
             instanceId: "item-inst-001" as ItemInstanceId,
-            definitionId: "item.medical.bandage" as import("../schemas/ids").ItemId,
+            definitionId:
+              "item.medical.bandage" as import("../schemas/ids").ItemId,
             quantity: 3,
             condition: 100,
           },
@@ -194,7 +195,8 @@ export const populatedGameState: GameState = {
   transports: [
     {
       instanceId: "transport-inst-001" as TransportInstanceId,
-      definitionId: "transport.water.canoe" as import("../schemas/ids").TransportId,
+      definitionId:
+        "transport.water.canoe" as import("../schemas/ids").TransportId,
       mode: "canoe",
       condition: 85,
       fuel: 0,
@@ -204,7 +206,8 @@ export const populatedGameState: GameState = {
 
   factions: [
     {
-      factionId: "faction.river.cooperative" as import("../schemas/ids").FactionId,
+      factionId:
+        "faction.river.cooperative" as import("../schemas/ids").FactionId,
       reputation: 20,
       promises: [],
       debts: 0,

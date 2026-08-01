@@ -18,9 +18,20 @@ import {
 
 // ── Player character ──────────────────────────────────────────────────────────
 
-export const PronounsSchema = z.enum(["they/them", "she/her", "he/him", "custom"]);
+export const PronounsSchema = z.enum([
+  "they/them",
+  "she/her",
+  "he/him",
+  "custom",
+]);
 
-export const AgeRangeSchema = z.enum(["teen", "young-adult", "adult", "middle-age", "older"]);
+export const AgeRangeSchema = z.enum([
+  "teen",
+  "young-adult",
+  "adult",
+  "middle-age",
+  "older",
+]);
 
 export const PlayerSchema = z.object({
   name: z.string().min(1).max(64),
@@ -44,7 +55,12 @@ export type Player = z.infer<typeof PlayerSchema>;
 
 // ── Companion ─────────────────────────────────────────────────────────────────
 
-export const CompanionStatusSchema = z.enum(["active", "separated", "dead", "left"]);
+export const CompanionStatusSchema = z.enum([
+  "active",
+  "separated",
+  "dead",
+  "left",
+]);
 
 export const CompanionStateSchema = z.object({
   id: CompanionIdSchema,

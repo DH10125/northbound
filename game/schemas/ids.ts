@@ -35,20 +35,20 @@
 import { z } from "zod";
 
 const segmentRe = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const segment = z.string().regex(segmentRe, "ID segment must be kebab-case [a-z0-9-]+");
-
-export const StableIdSchema = z
+const segment = z
   .string()
-  .refine(
-    (v) => {
-      const parts = v.split(".");
-      return parts.length >= 2 && parts.every((p) => segmentRe.test(p));
-    },
-    {
-      message:
-        "Stable ID must be at least two dot-separated kebab-case segments, e.g. item.medical.bandage",
-    }
-  );
+  .regex(segmentRe, "ID segment must be kebab-case [a-z0-9-]+");
+
+export const StableIdSchema = z.string().refine(
+  (v) => {
+    const parts = v.split(".");
+    return parts.length >= 2 && parts.every((p) => segmentRe.test(p));
+  },
+  {
+    message:
+      "Stable ID must be at least two dot-separated kebab-case segments, e.g. item.medical.bandage",
+  },
+);
 
 /**
  * Build a domain-prefixed StableId schema that enforces the first segment
@@ -66,9 +66,12 @@ export const ItemIdSchema = prefixedStableId("item").brand("ItemId");
 export const NodeIdSchema = prefixedStableId("node").brand("NodeId");
 export const EdgeIdSchema = prefixedStableId("edge").brand("EdgeId");
 export const FactionIdSchema = prefixedStableId("faction").brand("FactionId");
-export const CompanionIdSchema = prefixedStableId("companion").brand("CompanionId");
-export const TransportIdSchema = prefixedStableId("transport").brand("TransportId");
-export const OccupationIdSchema = prefixedStableId("occupation").brand("OccupationId");
+export const CompanionIdSchema =
+  prefixedStableId("companion").brand("CompanionId");
+export const TransportIdSchema =
+  prefixedStableId("transport").brand("TransportId");
+export const OccupationIdSchema =
+  prefixedStableId("occupation").brand("OccupationId");
 export const IllnessIdSchema = prefixedStableId("illness").brand("IllnessId");
 export const FlagIdSchema = segment.brand("FlagId");
 
@@ -77,7 +80,10 @@ export const FlagIdSchema = segment.brand("FlagId");
  * They are non-empty strings; convention: "<domain>-<uuid-v4>".
  */
 export const ItemInstanceIdSchema = z.string().min(1).brand("ItemInstanceId");
-export const TransportInstanceIdSchema = z.string().min(1).brand("TransportInstanceId");
+export const TransportInstanceIdSchema = z
+  .string()
+  .min(1)
+  .brand("TransportInstanceId");
 
 export type StableId = z.infer<typeof StableIdSchema>;
 export type EventId = z.infer<typeof EventIdSchema>;

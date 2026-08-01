@@ -60,7 +60,12 @@ const RawGameStateSchema = z.object({
   pursuit: PursuitStateSchema,
 
   /** Run completion status. */
-  runStatus: z.enum(["active", "ended-success", "ended-failure", "ended-evacuation"]),
+  runStatus: z.enum([
+    "active",
+    "ended-success",
+    "ended-failure",
+    "ended-evacuation",
+  ]),
 });
 
 export const GameStateSchema = RawGameStateSchema.superRefine((state, ctx) => {

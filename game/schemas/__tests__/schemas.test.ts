@@ -9,7 +9,12 @@ import {
 } from "../ids";
 import { AttributesSchema, MetersSchema } from "../meters";
 import { minimalGameState, populatedGameState } from "../../testing/fixtures";
-import type { ItemInstanceId, TransportInstanceId, FactionId, ItemId } from "../ids";
+import type {
+  ItemInstanceId,
+  TransportInstanceId,
+  FactionId,
+  ItemId,
+} from "../ids";
 
 // ── Stable ID validation ──────────────────────────────────────────────────────
 
@@ -19,7 +24,10 @@ describe("StableIdSchema", () => {
   });
 
   it("accepts valid three-segment ID", () => {
-    expect(StableIdSchema.safeParse("event.lower-mississippi.derelict-barge").success).toBe(true);
+    expect(
+      StableIdSchema.safeParse("event.lower-mississippi.derelict-barge")
+        .success,
+    ).toBe(true);
   });
 
   it("rejects single segment", () => {
@@ -43,7 +51,9 @@ describe("StableIdSchema", () => {
 
 describe("Domain-prefix enforcement", () => {
   it("EventIdSchema accepts event.* IDs", () => {
-    expect(EventIdSchema.safeParse("event.pensacola.first-night").success).toBe(true);
+    expect(EventIdSchema.safeParse("event.pensacola.first-night").success).toBe(
+      true,
+    );
   });
 
   it("EventIdSchema rejects item.* IDs", () => {
@@ -59,15 +69,21 @@ describe("Domain-prefix enforcement", () => {
   });
 
   it("ItemIdSchema rejects event.* IDs", () => {
-    expect(ItemIdSchema.safeParse("event.pensacola.first-night").success).toBe(false);
+    expect(ItemIdSchema.safeParse("event.pensacola.first-night").success).toBe(
+      false,
+    );
   });
 
   it("FactionIdSchema accepts faction.* IDs", () => {
-    expect(FactionIdSchema.safeParse("faction.river.cooperative").success).toBe(true);
+    expect(FactionIdSchema.safeParse("faction.river.cooperative").success).toBe(
+      true,
+    );
   });
 
   it("FactionIdSchema rejects transport.* IDs", () => {
-    expect(FactionIdSchema.safeParse("transport.water.canoe").success).toBe(false);
+    expect(FactionIdSchema.safeParse("transport.water.canoe").success).toBe(
+      false,
+    );
   });
 
   it("NodeIdSchema accepts node.* IDs", () => {
@@ -84,39 +100,68 @@ describe("Domain-prefix enforcement", () => {
 describe("MetersSchema", () => {
   it("accepts all-valid meters", () => {
     const valid = {
-      health: 100, hunger: 0, thirst: 50, fatigue: 20, temperature: 50,
-      stress: 10, morale: 80, infection: 0, radiation: 0, toxicExposure: 0,
-      cleanliness: 90, pain: 5, sleepDebt: 15,
+      health: 100,
+      hunger: 0,
+      thirst: 50,
+      fatigue: 20,
+      temperature: 50,
+      stress: 10,
+      morale: 80,
+      infection: 0,
+      radiation: 0,
+      toxicExposure: 0,
+      cleanliness: 90,
+      pain: 5,
+      sleepDebt: 15,
     };
     expect(MetersSchema.safeParse(valid).success).toBe(true);
   });
 
   it("rejects health > 100 with path", () => {
-    const r = MetersSchema.safeParse({ ...minimalGameState.party.player.meters, health: 101 });
+    const r = MetersSchema.safeParse({
+      ...minimalGameState.party.player.meters,
+      health: 101,
+    });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.path).toEqual(["health"]);
   });
 
   it("rejects negative morale with path", () => {
-    const r = MetersSchema.safeParse({ ...minimalGameState.party.player.meters, morale: -1 });
+    const r = MetersSchema.safeParse({
+      ...minimalGameState.party.player.meters,
+      morale: -1,
+    });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.path).toEqual(["morale"]);
   });
 
   it("rejects non-integer fatigue", () => {
-    expect(MetersSchema.safeParse({ ...minimalGameState.party.player.meters, fatigue: 10.5 }).success).toBe(false);
+    expect(
+      MetersSchema.safeParse({
+        ...minimalGameState.party.player.meters,
+        fatigue: 10.5,
+      }).success,
+    ).toBe(false);
   });
 });
 
 describe("AttributesSchema", () => {
   it("rejects attribute of 0 (below minimum of 1) with path", () => {
-    const r = AttributesSchema.safeParse({ ...minimalGameState.party.player.attributes, strength: 0 });
+    const r = AttributesSchema.safeParse({
+      ...minimalGameState.party.player.attributes,
+      strength: 0,
+    });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.path).toEqual(["strength"]);
   });
 
   it("rejects attribute of 11 (above maximum of 10)", () => {
-    expect(AttributesSchema.safeParse({ ...minimalGameState.party.player.attributes, endurance: 11 }).success).toBe(false);
+    expect(
+      AttributesSchema.safeParse({
+        ...minimalGameState.party.player.attributes,
+        endurance: 11,
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -154,34 +199,59 @@ describe("GameStateSchema – malformed shape inputs", () => {
     const r = GameStateSchema.safeParse(rest);
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p === "schemaVersion")).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p === "schemaVersion"),
+      ).toBe(true);
     }
   });
 
   it("rejects wrong schemaVersion with path", () => {
-    const r = GameStateSchema.safeParse({ ...minimalGameState, schemaVersion: 99 });
+    const r = GameStateSchema.safeParse({
+      ...minimalGameState,
+      schemaVersion: 99,
+    });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p === "schemaVersion")).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p === "schemaVersion"),
+      ).toBe(true);
     }
   });
 
   it("rejects invalid runStatus with path", () => {
-    const r = GameStateSchema.safeParse({ ...minimalGameState, runStatus: "winning" });
+    const r = GameStateSchema.safeParse({
+      ...minimalGameState,
+      runStatus: "winning",
+    });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p === "runStatus")).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p === "runStatus"),
+      ).toBe(true);
     }
   });
 
   it("rejects player name too long with nested path", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
-      party: { ...minimalGameState.party, player: { ...minimalGameState.party.player, name: "A".repeat(65) } },
+      party: {
+        ...minimalGameState.party,
+        player: { ...minimalGameState.party.player, name: "A".repeat(65) },
+      },
     });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p.includes("name"))).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p.includes("name")),
+      ).toBe(true);
     }
   });
 
@@ -192,15 +262,26 @@ describe("GameStateSchema – malformed shape inputs", () => {
     });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p.includes("chapter"))).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p.includes("chapter")),
+      ).toBe(true);
     }
   });
 
   it("rejects farm deadline of 0 with path", () => {
-    const r = GameStateSchema.safeParse({ ...minimalGameState, farm: { ...minimalGameState.farm, deadlineTurns: 0 } });
+    const r = GameStateSchema.safeParse({
+      ...minimalGameState,
+      farm: { ...minimalGameState.farm, deadlineTurns: 0 },
+    });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p.includes("deadlineTurns"))).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p.includes("deadlineTurns")),
+      ).toBe(true);
     }
   });
 
@@ -208,20 +289,43 @@ describe("GameStateSchema – malformed shape inputs", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
       inventory: {
-        storages: [{ location: "backpack", items: [{ instanceId: "item-abc", definitionId: "item.food.ration", quantity: 0, condition: 100 }] }],
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-abc",
+                definitionId: "item.food.ration",
+                quantity: 0,
+                condition: 100,
+              },
+            ],
+          },
+        ],
       },
     });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p.includes("quantity"))).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p.includes("quantity")),
+      ).toBe(true);
     }
   });
 
   it("rejects pursuit intensity > 100 with path", () => {
-    const r = GameStateSchema.safeParse({ ...minimalGameState, pursuit: { pursuingFactionIds: [], intensity: 101 } });
+    const r = GameStateSchema.safeParse({
+      ...minimalGameState,
+      pursuit: { pursuingFactionIds: [], intensity: 101 },
+    });
     expect(r.success).toBe(false);
     if (!r.success) {
-      expect(r.error.issues.map((i) => i.path.join(".")).some((p) => p.includes("intensity"))).toBe(true);
+      expect(
+        r.error.issues
+          .map((i) => i.path.join("."))
+          .some((p) => p.includes("intensity")),
+      ).toBe(true);
     }
   });
 
@@ -240,7 +344,10 @@ describe("GameStateSchema – dangling references", () => {
   it("rejects activeTransportId that has no matching transport entry, at path party.activeTransportId", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
-      party: { ...minimalGameState.party, activeTransportId: "transport-ghost-999" as TransportInstanceId },
+      party: {
+        ...minimalGameState.party,
+        activeTransportId: "transport-ghost-999" as TransportInstanceId,
+      },
       transports: [],
     });
     expect(r.success).toBe(false);
@@ -255,14 +362,19 @@ describe("GameStateSchema – dangling references", () => {
       ...minimalGameState,
       party: {
         ...minimalGameState.party,
-        player: { ...minimalGameState.party.player, equippedItemIds: ["item-ghost-999" as ItemInstanceId] },
+        player: {
+          ...minimalGameState.party.player,
+          equippedItemIds: ["item-ghost-999" as ItemInstanceId],
+        },
       },
       inventory: { storages: [{ location: "backpack", items: [] }] },
     });
     expect(r.success).toBe(false);
     if (!r.success) {
       const paths = r.error.issues.map((i) => i.path.join("."));
-      expect(paths.some((p) => p === "party.player.equippedItemIds.0")).toBe(true);
+      expect(paths.some((p) => p === "party.player.equippedItemIds.0")).toBe(
+        true,
+      );
     }
   });
 
@@ -292,7 +404,9 @@ describe("GameStateSchema – dangling references", () => {
     expect(r.success).toBe(false);
     if (!r.success) {
       const paths = r.error.issues.map((i) => i.path.join("."));
-      expect(paths.some((p) => p === "party.companions.0.carriedItemIds.0")).toBe(true);
+      expect(
+        paths.some((p) => p === "party.companions.0.carriedItemIds.0"),
+      ).toBe(true);
     }
   });
 
@@ -327,12 +441,16 @@ describe("GameStateSchema – dangling references", () => {
     };
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
-      inventory: { storages: [{ location: "backpack", items: [dupItem, { ...dupItem }] }] },
+      inventory: {
+        storages: [{ location: "backpack", items: [dupItem, { ...dupItem }] }],
+      },
     });
     expect(r.success).toBe(false);
     if (!r.success) {
       const paths = r.error.issues.map((i) => i.path.join("."));
-      expect(paths.some((p) => p === "inventory.storages.0.items.1.instanceId")).toBe(true);
+      expect(
+        paths.some((p) => p === "inventory.storages.0.items.1.instanceId"),
+      ).toBe(true);
     }
   });
 
@@ -384,7 +502,9 @@ describe("GameStateSchema – dangling references", () => {
     expect(r.success).toBe(false);
     if (!r.success) {
       const paths = r.error.issues.map((i) => i.path.join("."));
-      expect(paths.some((p) => p === "pursuit.pursuingFactionIds.0")).toBe(true);
+      expect(paths.some((p) => p === "pursuit.pursuingFactionIds.0")).toBe(
+        true,
+      );
     }
   });
 
@@ -403,9 +523,19 @@ describe("Instance IDs vs definition IDs", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
       inventory: {
-        storages: [{ location: "backpack", items: [
-          { instanceId: "item-abc-123", definitionId: "item.food.ration", quantity: 1, condition: 100 },
-        ]}],
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-abc-123",
+                definitionId: "item.food.ration",
+                quantity: 1,
+                condition: 100,
+              },
+            ],
+          },
+        ],
       },
     });
     if (!r.success) console.error(r.error.format());
@@ -416,9 +546,19 @@ describe("Instance IDs vs definition IDs", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
       inventory: {
-        storages: [{ location: "backpack", items: [
-          { instanceId: "", definitionId: "item.food.ration", quantity: 1, condition: 100 },
-        ]}],
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "",
+                definitionId: "item.food.ration",
+                quantity: 1,
+                condition: 100,
+              },
+            ],
+          },
+        ],
       },
     });
     expect(r.success).toBe(false);
@@ -428,9 +568,19 @@ describe("Instance IDs vs definition IDs", () => {
     const r = GameStateSchema.safeParse({
       ...minimalGameState,
       inventory: {
-        storages: [{ location: "backpack", items: [
-          { instanceId: "item-abc-123", definitionId: "event.foo.bar", quantity: 1, condition: 100 },
-        ]}],
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-abc-123",
+                definitionId: "event.foo.bar",
+                quantity: 1,
+                condition: 100,
+              },
+            ],
+          },
+        ],
       },
     });
     expect(r.success).toBe(false);
