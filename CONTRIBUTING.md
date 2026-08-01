@@ -8,18 +8,18 @@ Commits should be focused and imperative. Pull requests must link the issue, exp
 
 ## Commands
 
-| Command                 | Purpose                                                |
-| ----------------------- | ------------------------------------------------------ |
-| `npm run format`        | Auto-format all files                                  |
-| `npm run format:check`  | Verify formatting (CI gate)                            |
-| `npm run lint`          | ESLint (CI gate)                                       |
-| `npm run typecheck`     | TypeScript strict check (CI gate)                      |
-| `npm test`              | Vitest watch mode                                      |
-| `npm test -- --run`     | Unit/component tests once (CI gate)                    |
-| `npm run test:coverage` | Unit/component tests with lcov coverage (CI gate)      |
-| `npm run test:e2e`      | Playwright smoke tests (CI gate, needs running server) |
-| `npm run build`         | Production build (CI gate)                             |
-| `npm run dev`           | Local dev server                                       |
+| Command                 | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `npm run format`        | Auto-format all files                                         |
+| `npm run format:check`  | Verify formatting (CI gate)                                   |
+| `npm run lint`          | ESLint (CI gate)                                              |
+| `npm run typecheck`     | TypeScript strict check (CI gate)                             |
+| `npm test`              | Vitest watch mode                                             |
+| `npm test -- --run`     | Unit/component tests once (CI gate)                           |
+| `npm run test:coverage` | Unit/component tests with lcov coverage (CI gate)             |
+| `npm run test:e2e`      | Playwright smoke tests (CI gate, starts server automatically) |
+| `npm run build`         | Production build (CI gate)                                    |
+| `npm run dev`           | Local dev server                                              |
 
 ## Required checks
 
