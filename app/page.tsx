@@ -1,26 +1,49 @@
+import { StatusBadge } from "@/components/ui/StatusBadge";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-24">
-      <div className="max-w-2xl w-full space-y-10 text-center">
-        <h1 className="text-5xl font-bold tracking-tight text-stone-100">
-          Northbound
-        </h1>
-        <p className="text-xl text-stone-400 leading-relaxed">
-          A narrative survival-management game. Stranded in Pensacola, you must
-          reach your family farm near Butternut before it&apos;s too late.
-        </p>
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="flex flex-1 flex-col items-center justify-center px-4 py-16 sm:px-6 sm:py-24"
+    >
+      <div className="w-full max-w-2xl space-y-10 text-center">
+        <header>
+          <h1
+            className="text-4xl sm:text-5xl font-bold tracking-tight"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Northbound
+          </h1>
+          <p
+            className="mt-4 text-lg sm:text-xl leading-relaxed"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            A narrative survival-management game. Stranded in Pensacola, you
+            must reach your family farm near Butternut before it&apos;s too
+            late.
+          </p>
+        </header>
 
         <section
           aria-labelledby="principles-heading"
-          className="text-left space-y-4 border border-stone-800 rounded-lg p-6"
+          className="text-left space-y-4 rounded-[var(--radius-lg)] p-6"
+          style={{
+            border: "1px solid var(--surface-border)",
+            background: "var(--surface-raised)",
+          }}
         >
           <h2
             id="principles-heading"
-            className="text-lg font-semibold text-stone-200 text-center"
+            className="text-lg font-semibold text-center"
+            style={{ color: "var(--text-primary)" }}
           >
             Product principles
           </h2>
-          <ul className="space-y-3 text-sm text-stone-400 list-none">
+          <ul
+            className="space-y-3 text-sm list-none"
+            style={{ color: "var(--text-secondary)" }}
+          >
             <li>Every run tells a different, coherent survival story.</li>
             <li>
               Avoidance, preparation, empathy, and trade are often better than
@@ -40,7 +63,35 @@ export default function Home() {
           </ul>
         </section>
 
-        <p className="text-xs text-stone-600 pt-4">
+        {/* Status indicator demo — non-colour status for accessibility */}
+        <section
+          aria-labelledby="status-demo-heading"
+          className="text-left space-y-3 rounded-[var(--radius-lg)] p-6"
+          style={{
+            border: "1px solid var(--surface-border-subtle)",
+            background: "var(--surface-inset)",
+          }}
+        >
+          <h2
+            id="status-demo-heading"
+            className="text-sm font-semibold"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            Status system preview
+          </h2>
+          <div className="flex flex-wrap gap-4">
+            <StatusBadge status="ok" label="Health" value="82%" />
+            <StatusBadge status="warn" label="Water" value="Low" />
+            <StatusBadge status="danger" label="Farm" value="Critical" />
+            <StatusBadge status="info" label="Weather" value="Clear" />
+            <StatusBadge status="neutral" label="Phase" value="Day" />
+          </div>
+        </section>
+
+        <p
+          className="text-xs pt-4"
+          style={{ color: "var(--text-tertiary)" }}
+        >
           Early development — nothing to play yet.
         </p>
       </div>

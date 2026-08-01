@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SkipNav } from "@/components/ui/SkipNav";
+import { LiveRegion } from "@/components/ui/LiveRegion";
 
 export const metadata: Metadata = {
   title: "Northbound",
@@ -14,8 +16,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-stone-950 text-stone-100 min-h-screen antialiased">
-        {children}
+      <body>
+        {/* Skip-navigation: first interactive element in tab order */}
+        <SkipNav targetId="main-content" />
+
+        {/* Global polite live region for turn results / AT announcements */}
+        <LiveRegion />
+
+        {/* Responsive shell: fluid at 320px, constrained at max-width */}
+        <div className="min-h-[100svh] flex flex-col">
+          {children}
+        </div>
       </body>
     </html>
   );
