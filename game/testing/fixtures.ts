@@ -5,6 +5,12 @@
 
 import type { GameState } from "../schemas/game-state";
 import { GAME_STATE_SCHEMA_VERSION } from "../schemas/game-state";
+import type {
+  ItemInstanceId,
+  NodeId,
+  OccupationId,
+  TransportInstanceId,
+} from "../schemas/ids";
 
 export const minimalGameState: GameState = {
   schemaVersion: GAME_STATE_SCHEMA_VERSION,
@@ -19,7 +25,7 @@ export const minimalGameState: GameState = {
       pronouns: "they/them",
       ageRange: "adult",
       portraitIndex: 0,
-      occupationId: "occupation.farmer" as import("../schemas/ids").OccupationId,
+      occupationId: "occupation.farmer" as OccupationId,
       motivation: "Reach the family farm.",
       weakness: "Slow healer.",
       attributes: {
@@ -68,12 +74,12 @@ export const minimalGameState: GameState = {
   transports: [],
 
   location: {
-    currentNodeId: "node.pensacola.hotel" as import("../schemas/ids").NodeId,
+    currentNodeId: "node.pensacola.hotel" as NodeId,
     lastEdgeId: null,
     chapter: "pensacola-escape",
     terrain: "urban",
     distanceRemaining: 1500,
-    visitedNodeIds: ["node.pensacola.hotel" as import("../schemas/ids").NodeId],
+    visitedNodeIds: ["node.pensacola.hotel" as NodeId],
   },
 
   world: {
@@ -125,4 +131,84 @@ export const minimalGameState: GameState = {
     pursuingFactionIds: [],
     intensity: 0,
   },
+};
+
+/**
+ * Fixture with one inventory item, one transport, a companion, and the player
+ * equipped with an item — for referential-integrity tests.
+ */
+export const populatedGameState: GameState = {
+  ...minimalGameState,
+
+  party: {
+    player: {
+      ...minimalGameState.party.player,
+      equippedItemIds: ["item-inst-001" as ItemInstanceId],
+    },
+    companions: [
+      {
+        id: "companion.marisol" as import("../schemas/ids").CompanionId,
+        name: "Marisol",
+        status: "active",
+        attributes: minimalGameState.party.player.attributes,
+        meters: minimalGameState.party.player.meters,
+        morale: 70,
+        loyalty: 80,
+        fear: 10,
+        carriedItemIds: ["item-inst-002" as ItemInstanceId],
+        relationships: {},
+        flags: [],
+      },
+    ],
+    activeTransportId: "transport-inst-001" as TransportInstanceId,
+  },
+
+  inventory: {
+    storages: [
+      {
+        location: "backpack",
+        items: [
+          {
+            instanceId: "item-inst-001" as ItemInstanceId,
+            definitionId: "item.medical.bandage" as import("../schemas/ids").ItemId,
+            quantity: 3,
+            condition: 100,
+          },
+          {
+            instanceId: "item-inst-002" as ItemInstanceId,
+            definitionId: "item.food.ration" as import("../schemas/ids").ItemId,
+            quantity: 2,
+            condition: 90,
+          },
+          {
+            instanceId: "item-inst-003" as ItemInstanceId,
+            definitionId: "item.gear.rope" as import("../schemas/ids").ItemId,
+            quantity: 1,
+            condition: 100,
+          },
+        ],
+      },
+    ],
+  },
+
+  transports: [
+    {
+      instanceId: "transport-inst-001" as TransportInstanceId,
+      definitionId: "transport.water.canoe" as import("../schemas/ids").TransportId,
+      mode: "canoe",
+      condition: 85,
+      fuel: 0,
+      cargoItemIds: ["item-inst-003" as ItemInstanceId],
+    },
+  ],
+
+  factions: [
+    {
+      factionId: "faction.river.cooperative" as import("../schemas/ids").FactionId,
+      reputation: 20,
+      promises: [],
+      debts: 0,
+      hasAccess: true,
+    },
+  ],
 };

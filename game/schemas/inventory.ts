@@ -1,16 +1,19 @@
 /**
  * Inventory and storage schemas.
+ *
+ * instanceId fields are runtime ItemInstanceId values (non-empty strings),
+ * NOT authored definition IDs. definitionId references the authored ItemId.
  */
 
 import { z } from "zod";
-import { ItemIdSchema, NodeIdSchema } from "./ids";
+import { ItemInstanceIdSchema, ItemIdSchema, NodeIdSchema } from "./ids";
 
 // ── Item instance ─────────────────────────────────────────────────────────────
 
 export const ItemInstanceSchema = z.object({
-  /** Unique runtime ID (UUID or similar) to distinguish stack members. */
-  instanceId: z.string().min(1),
-  /** Reference to the authored item definition ID. */
+  /** Unique runtime instance ID (e.g. "item-<uuid>"). Distinct from definitionId. */
+  instanceId: ItemInstanceIdSchema,
+  /** Reference to the authored item definition ID, e.g. "item.medical.bandage". */
   definitionId: ItemIdSchema,
   /** Quantity in stack. */
   quantity: z.number().int().min(1),

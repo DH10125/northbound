@@ -1,10 +1,20 @@
 /**
  * Player and party schemas.
+ *
+ * equippedItemIds and companion carriedItemIds hold runtime ItemInstanceIds
+ * referencing items present in inventory, NOT authored definition IDs.
+ * activeTransportId holds a runtime TransportInstanceId referencing a
+ * transport in the transports array, NOT a definition ID.
  */
 
 import { z } from "zod";
 import { AttributesSchema, MetersSchema } from "./meters";
-import { CompanionIdSchema, ItemIdSchema, OccupationIdSchema, TransportIdSchema } from "./ids";
+import {
+  CompanionIdSchema,
+  ItemInstanceIdSchema,
+  OccupationIdSchema,
+  TransportInstanceIdSchema,
+} from "./ids";
 
 // ── Player character ──────────────────────────────────────────────────────────
 
@@ -24,8 +34,8 @@ export const PlayerSchema = z.object({
   weakness: z.string().max(256),
   attributes: AttributesSchema,
   meters: MetersSchema,
-  /** IDs of items currently worn/equipped on body (subset of inventory). */
-  equippedItemIds: z.array(ItemIdSchema),
+  /** Runtime instance IDs of items currently worn/equipped (subset of inventory). */
+  equippedItemIds: z.array(ItemInstanceIdSchema),
   /** Long-term consequences from the condition model. */
   conditions: z.array(z.string()),
 });
@@ -45,8 +55,8 @@ export const CompanionStateSchema = z.object({
   morale: z.number().int().min(0).max(100),
   loyalty: z.number().int().min(0).max(100),
   fear: z.number().int().min(0).max(100),
-  /** IDs of items this companion carries. */
-  carriedItemIds: z.array(ItemIdSchema),
+  /** Runtime instance IDs of items this companion carries (subset of inventory). */
+  carriedItemIds: z.array(ItemInstanceIdSchema),
   /** Pairwise relationship scores keyed by other companion id. */
   relationships: z.record(z.string(), z.number().int().min(-100).max(100)),
   /** Flags for hidden traits or story state. */
@@ -60,8 +70,8 @@ export type CompanionState = z.infer<typeof CompanionStateSchema>;
 export const PartySchema = z.object({
   player: PlayerSchema,
   companions: z.array(CompanionStateSchema),
-  /** Active transport the party is using, if any. */
-  activeTransportId: TransportIdSchema.nullable(),
+  /** Runtime instance ID of the active transport, or null if on foot. */
+  activeTransportId: TransportInstanceIdSchema.nullable(),
 });
 
 export type Party = z.infer<typeof PartySchema>;
