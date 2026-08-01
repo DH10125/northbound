@@ -1,0 +1,36 @@
+name: Development chunk
+description: Propose scoped implementation work
+title: "[Chunk]: "
+labels: ["status: ready"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: Describe the player or developer outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: input
+    id: dependencies
+    attributes:
+      label: Dependencies
+      placeholder: "#1, #2, or None"
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification plan
+    validations:
+      required: true
