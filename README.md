@@ -38,18 +38,18 @@ Planning scaffold. GitHub issues are deliberately sequential and self-contained 
 
 ## Local development
 
-Issue 01 will initialize the app. The target commands will be:
+**Requirements:** Node.js 22 (see `.nvmrc`), npm 10+.
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:3000
 npm run lint
 npm run typecheck
-npm test
+npm test -- --run
 npm run build
 ```
 
-Vercel should import the repository using the Next.js defaults. Deployment is intentionally not performed by this planning scaffold because credentials and account authorization are external.
+Vercel imports the repository using the Next.js defaults. Core gameplay requires no environment variables.
 
 ## License
 
