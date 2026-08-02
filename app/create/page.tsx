@@ -62,7 +62,10 @@ export default function CreatePage() {
           </p>
         </div>
         {error && (
-          <div role="alert" className="mb-4 p-3 text-sm bg-red-900/30 text-red-300 rounded">
+          <div
+            role="alert"
+            className="mb-4 p-3 text-sm bg-red-900/30 text-red-300 rounded"
+          >
             {error}
           </div>
         )}

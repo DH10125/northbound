@@ -26,6 +26,13 @@ import type {
   Effect,
 } from "../content/event-definitions";
 import type { Attributes, Meters } from "../schemas/meters";
+import type {
+  ItemId,
+  ItemInstanceId,
+  TransportId,
+  TransportInstanceId,
+} from "../schemas/ids";
+import type { TransportState } from "../schemas/transport";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -526,8 +533,9 @@ export function applyEffects(
             items: [
               ...storage.items,
               {
-                instanceId: `${effect.itemId}:${s.world.elapsedHours}`,
-                definitionId: effect.itemId,
+                instanceId:
+                  `${effect.itemId}:${s.world.elapsedHours}` as ItemInstanceId,
+                definitionId: effect.itemId as ItemId,
                 quantity: effect.quantity,
                 condition: 100,
               },
@@ -539,19 +547,19 @@ export function applyEffects(
       }
       case "transport-set": {
         const newTransport = {
-          instanceId: effect.instanceId,
-          definitionId: effect.definitionId,
-          mode: effect.mode,
+          instanceId: effect.instanceId as TransportInstanceId,
+          definitionId: effect.definitionId as TransportId,
+          mode: effect.mode as TransportState["mode"],
           condition: effect.condition,
-          fuel: null as number | null,
-          cargoItemIds: [] as string[],
+          fuel: 0,
+          cargoItemIds: [] as ItemInstanceId[],
         };
         s = {
           ...s,
           transports: [...s.transports, newTransport],
           party: {
             ...s.party,
-            activeTransportId: effect.instanceId,
+            activeTransportId: effect.instanceId as TransportInstanceId,
           },
         };
         break;

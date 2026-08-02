@@ -137,7 +137,11 @@ export default function PlayPage() {
 
   const activateEvent = useCallback(() => {
     if (!state.game) return;
-    const result = applyCommand(state.game, { type: "ACTIVATE_EVENT" }, state.rng);
+    const result = applyCommand(
+      state.game,
+      { type: "ACTIVATE_EVENT" },
+      state.rng,
+    );
     const started = result.events.find((e) => e.type === "ENCOUNTER_STARTED");
     if (started && "eventId" in started) {
       const evt = PENSACOLA_EVENTS.find(
@@ -194,7 +198,7 @@ export default function PlayPage() {
   // ── Route traversal ─────────────────────────────────────────────────────────
 
   const chooseRoute = useCallback(
-    (edgeId: string) => {
+    (edgeId: EdgeId) => {
       if (!state.game) return;
       const result = applyCommand(
         state.game,
@@ -281,10 +285,7 @@ export default function PlayPage() {
           >
             {game.party.player.name}&apos;s Journey
           </h1>
-          <span
-            className="text-sm"
-            style={{ color: "var(--text-secondary)" }}
-          >
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Day {game.world.day} · {game.world.phase}
           </span>
         </header>
@@ -351,7 +352,10 @@ export default function PlayPage() {
 
         {/* Meters */}
         {!state.chapterComplete && (
-          <section aria-label="Player status" className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-sm">
+          <section
+            aria-label="Player status"
+            className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-sm"
+          >
             {(
               [
                 ["Health", game.party.player.meters.health],
@@ -399,11 +403,7 @@ export default function PlayPage() {
                 >
                   {state.activeEvent.title}
                 </h2>
-                <div
-                  ref={liveRef}
-                  aria-live="polite"
-                  aria-atomic="true"
-                >
+                <div ref={liveRef} aria-live="polite" aria-atomic="true">
                   <p style={{ color: "var(--text-secondary)" }}>
                     {state.resolutionText}
                   </p>
@@ -466,10 +466,7 @@ export default function PlayPage() {
                   Travel routes:
                 </h3>
                 {edges.map((edge) => {
-                  const dest = getNode(
-                    pensacolaGraph,
-                    edge.toNodeId as NodeId,
-                  );
+                  const dest = getNode(pensacolaGraph, edge.toNodeId as NodeId);
                   return (
                     <button
                       key={edge.id}
