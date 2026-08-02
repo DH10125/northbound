@@ -167,6 +167,7 @@ export function buildInitialGameState(draft: CharacterDraft): GameState {
       activeFlags: [],
       cooldowns: {},
       pendingFollowUp: null,
+      activeEventId: null,
     },
 
     farm: {

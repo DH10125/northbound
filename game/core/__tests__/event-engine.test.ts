@@ -23,6 +23,14 @@ import type {
 import { minimalGameState } from "../../testing/fixtures";
 import type { GameState } from "../../schemas/game-state";
 
+/** Helper: returns state with activeEventId set for authorization. */
+function withActiveEvent(state: GameState, eventId: string): GameState {
+  return {
+    ...state,
+    eventHistory: { ...state.eventHistory, activeEventId: eventId },
+  };
+}
+
 // ── Test fixtures ────────────────────────────────────────────────────────────
 
 const basicEvent: EventDefinition = {
@@ -670,7 +678,11 @@ describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
       eventId: "event.test.basic",
       optionId: "opt-a",
     };
-    const { state, events } = applyCommand(minimalGameState, cmd, rng);
+    const { state, events } = applyCommand(
+      withActiveEvent(minimalGameState, "event.test.basic"),
+      cmd,
+      rng,
+    );
     expect(events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(true);
     expect(state.eventHistory.entries).toHaveLength(1);
   });
@@ -682,7 +694,11 @@ describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
       eventId: "event.nonexistent.id",
       optionId: "opt-a",
     };
-    const { events } = applyCommand(minimalGameState, cmd, rng);
+    const { events } = applyCommand(
+      withActiveEvent(minimalGameState, "event.nonexistent.id"),
+      cmd,
+      rng,
+    );
     expect(events[0]?.type).toBe("COMMAND_REJECTED");
   });
 
@@ -693,9 +709,17 @@ describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
       eventId: "event.test.basic",
       optionId: "opt-a",
     };
-    const first = applyCommand(minimalGameState, cmd, rng);
-    // Try to resolve again at same elapsedHours
-    const second = applyCommand(first.state, cmd, first.rng);
+    const first = applyCommand(
+      withActiveEvent(minimalGameState, "event.test.basic"),
+      cmd,
+      rng,
+    );
+    // Try to resolve again at same elapsedHours — activeEventId was cleared
+    const second = applyCommand(
+      withActiveEvent(first.state, "event.test.basic"),
+      cmd,
+      first.rng,
+    );
     expect(second.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
   });
 });
@@ -715,8 +739,16 @@ describe("event engine – replay equivalence", () => {
       optionId: "opt-heal",
     };
 
-    const r1 = applyCommand(minimalGameState, cmd, rng);
-    const r2 = applyCommand(minimalGameState, cmd, rng);
+    const r1 = applyCommand(
+      withActiveEvent(minimalGameState, "event.test.effects"),
+      cmd,
+      rng,
+    );
+    const r2 = applyCommand(
+      withActiveEvent(minimalGameState, "event.test.effects"),
+      cmd,
+      rng,
+    );
 
     expect(JSON.stringify(r1.state)).toBe(JSON.stringify(r2.state));
     expect(r1.rng).toEqual(r2.rng);
@@ -793,7 +825,7 @@ describe("event engine – follow-up chains", () => {
     const rng = seedToState("chain-test");
     // Resolve first event
     const r1 = applyCommand(
-      minimalGameState,
+      withActiveEvent(minimalGameState, "event.test.chain1"),
       {
         type: "CHOOSE_EVENT_OPTION",
         eventId: "event.test.chain1",
@@ -807,7 +839,7 @@ describe("event engine – follow-up chains", () => {
     const candidates = filterCandidates([chainEvent2], r1.state, 1);
     expect(candidates).toHaveLength(1);
 
-    // Resolve second event
+    // Resolve second event (authorized via pendingFollowUp)
     const r2 = applyCommand(
       r1.state,
       {
@@ -828,7 +860,7 @@ describe("event engine – follow-up chains", () => {
   it("resolving chain1 sets pendingFollowUp in state", () => {
     const rng = seedToState("chain-pending");
     const r1 = applyCommand(
-      minimalGameState,
+      withActiveEvent(minimalGameState, "event.test.chain1"),
       {
         type: "CHOOSE_EVENT_OPTION",
         eventId: "event.test.chain1",
@@ -846,6 +878,7 @@ describe("event engine – follow-up chains", () => {
         ...minimalGameState.eventHistory,
         pendingFollowUp: "event.test.chain2",
         activeFlags: ["chain-started"],
+        activeEventId: "event.test.chain1",
       },
     };
     setEventRegistry([chainEvent1, chainEvent2]);
@@ -902,6 +935,7 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
       ...minimalGameState,
       eventHistory: {
         ...minimalGameState.eventHistory,
+        activeEventId: "event.test.once",
         entries: [
           {
             eventId: "event.test.once" as import("../../schemas/ids").EventId,
@@ -930,6 +964,7 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
       ...minimalGameState,
       eventHistory: {
         ...minimalGameState.eventHistory,
+        activeEventId: "event.test.cooldown",
         cooldowns: { "event.test.cooldown": 0 },
       },
     };
@@ -951,6 +986,10 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
     // basicEvent trigger requires chapter=pensacola-escape
     const stateWrongChapter: GameState = {
       ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        activeEventId: "event.test.basic",
+      },
       location: { ...minimalGameState.location, chapter: "butternut" },
     };
     const rng = seedToState("trigger-reject");
@@ -964,5 +1003,21 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
       rng,
     );
     expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+
+  it("rejects event not activated (forged ID)", () => {
+    const rng = seedToState("forged-reject");
+    // basicEvent trigger IS met (chapter=pensacola-escape) but not activated
+    const result = applyCommand(
+      minimalGameState,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.basic",
+        optionId: "opt-a",
+      },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+    expect(result.rng).toEqual(rng); // RNG not consumed
   });
 });

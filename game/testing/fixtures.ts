@@ -100,6 +100,7 @@ export const minimalGameState: GameState = {
     activeFlags: [],
     cooldowns: {},
     pendingFollowUp: null,
+    activeEventId: null,
   },
 
   farm: {

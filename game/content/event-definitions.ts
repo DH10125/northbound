@@ -95,23 +95,82 @@ export const ConditionLeafSchema = z
     /** Value to compare against */
     value: z.union([z.string(), z.number(), z.boolean()]),
   })
-  .refine(
-    (leaf) => {
-      // has/not-has require string value
+  .superRefine((leaf, ctx) => {
+    // has/not-has require string value
+    if (leaf.op === "has" || leaf.op === "not-has") {
+      if (typeof leaf.value !== "string") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Operator/value type mismatch: has/not-has require string value",
+        });
+      }
+    }
+    // gt/gte/lt/lte require numeric value
+    if (["gt", "gte", "lt", "lte"].includes(leaf.op)) {
+      if (typeof leaf.value !== "number") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Operator/value type mismatch: gt/gte/lt/lte require number value",
+        });
+      }
+    }
+
+    // Field-specific operator constraints
+    const setFields = [
+      "flag",
+      "inventory",
+      "inventory.tag",
+      "companion",
+      "visitedNode",
+      "hazard",
+    ];
+    const numericFields = [
+      "day",
+      "elapsedHours",
+      "noiseLevel",
+      "pursuit.intensity",
+      ...KNOWN_METERS.map((m) => `meter.${m}`),
+      ...KNOWN_ATTRIBUTES.map((a) => `attribute.${a}`),
+    ];
+    const enumFields = ["chapter", "terrain", "phase", "weather", "runStatus"];
+
+    if (setFields.includes(leaf.field)) {
+      if (leaf.op !== "has" && leaf.op !== "not-has") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Field "${leaf.field}" requires operator has/not-has`,
+        });
+      }
+    } else if (numericFields.includes(leaf.field)) {
       if (leaf.op === "has" || leaf.op === "not-has") {
-        return typeof leaf.value === "string";
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Numeric field "${leaf.field}" cannot use has/not-has operator`,
+        });
       }
-      // gt/gte/lt/lte require numeric value
-      if (["gt", "gte", "lt", "lte"].includes(leaf.op)) {
-        return typeof leaf.value === "number";
+      if (typeof leaf.value !== "number") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Numeric field "${leaf.field}" requires a number value`,
+        });
       }
-      return true;
-    },
-    {
-      message:
-        "Operator/value type mismatch: has/not-has require string; gt/gte/lt/lte require number",
-    },
-  );
+    } else if (enumFields.includes(leaf.field)) {
+      if (leaf.op !== "eq" && leaf.op !== "neq") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Enum field "${leaf.field}" requires operator eq/neq`,
+        });
+      }
+      if (typeof leaf.value !== "string") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Enum field "${leaf.field}" requires a string value`,
+        });
+      }
+    }
+  });
 
 export type ConditionLeaf = z.infer<typeof ConditionLeafSchema>;
 
@@ -273,18 +332,73 @@ export function validateEventRegistry(events: ReadonlyArray<EventDefinition>): {
     eventIds.add(event.id);
   }
 
-  // Check follow-up references
+  // Check follow-up references, self-refs, multiple follow-ups per outcome
   for (const event of events) {
     for (const option of event.options) {
       for (const outcome of option.outcomes) {
-        for (const effect of outcome.effects) {
-          if (effect.type === "follow-up" && !eventIds.has(effect.eventId)) {
-            errors.push(
-              `Event "${event.id}" references unknown follow-up "${effect.eventId}"`,
-            );
+        const followUps = outcome.effects.filter(
+          (e) => e.type === "follow-up",
+        );
+        if (followUps.length > 1) {
+          errors.push(
+            `Event "${event.id}" option "${option.id}" has multiple follow-up effects in one outcome`,
+          );
+        }
+        for (const effect of followUps) {
+          if (effect.type === "follow-up") {
+            if (effect.eventId === event.id) {
+              errors.push(
+                `Event "${event.id}" has a self-referencing follow-up`,
+              );
+            } else if (!eventIds.has(effect.eventId)) {
+              errors.push(
+                `Event "${event.id}" references unknown follow-up "${effect.eventId}"`,
+              );
+            }
           }
         }
       }
+    }
+  }
+
+  // Check for immediate cycles (A→B→A)
+  const followUpGraph = new Map<string, Set<string>>();
+  for (const event of events) {
+    const targets = new Set<string>();
+    for (const option of event.options) {
+      for (const outcome of option.outcomes) {
+        for (const effect of outcome.effects) {
+          if (effect.type === "follow-up") {
+            targets.add(effect.eventId);
+          }
+        }
+      }
+    }
+    if (targets.size > 0) {
+      followUpGraph.set(event.id, targets);
+    }
+  }
+
+  // Detect cycles via DFS
+  function hasCycle(start: string): boolean {
+    const visited = new Set<string>();
+    const stack = [start];
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (current === start && visited.size > 0) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      const neighbors = followUpGraph.get(current);
+      if (neighbors) {
+        for (const n of neighbors) stack.push(n);
+      }
+    }
+    return false;
+  }
+
+  for (const eventId of followUpGraph.keys()) {
+    if (hasCycle(eventId)) {
+      errors.push(`Follow-up cycle detected involving "${eventId}"`);
     }
   }
 

@@ -605,6 +605,21 @@ function applyChooseEventOption(
     };
   }
 
+  // Active-event authorization: must be the pendingFollowUp or activeEventId
+  const isPendingFollowUp = state.eventHistory.pendingFollowUp === eventId;
+  if (!isPendingFollowUp && state.eventHistory.activeEventId !== eventId) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" is not the active or pending event.`,
+        },
+      ],
+    };
+  }
+
   // Once-only: cannot resolve if already in history
   if (event.once) {
     if (state.eventHistory.entries.some((e) => e.eventId === eventId)) {
@@ -673,7 +688,7 @@ function applyChooseEventOption(
     };
   }
 
-  // Clear pendingFollowUp before resolving (it will be set again if this event chains)
+  // Clear pendingFollowUp and activeEventId before resolving (they will be set again if this event chains)
   let stateForResolution = state;
   if (state.eventHistory.pendingFollowUp === eventId) {
     stateForResolution = {
@@ -681,6 +696,15 @@ function applyChooseEventOption(
       eventHistory: {
         ...state.eventHistory,
         pendingFollowUp: null,
+        activeEventId: null,
+      },
+    };
+  } else {
+    stateForResolution = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        activeEventId: null,
       },
     };
   }
@@ -822,6 +846,66 @@ function applyConsumeItem(
   return { state: nextState, rng, events };
 }
 
+// ── Activate event ────────────────────────────────────────────────────────────
+
+function applyActivateEvent(
+  state: GameState,
+  rng: RngState,
+  eventId: string,
+): ReducerResult {
+  if (state.runStatus !== "active") {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: "Run is not active." }],
+    };
+  }
+
+  // Cannot activate if a follow-up is pending
+  if (state.eventHistory.pendingFollowUp !== null) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Cannot activate event while follow-up "${state.eventHistory.pendingFollowUp}" is pending.`,
+        },
+      ],
+    };
+  }
+
+  // Verify event exists in registry
+  const event = eventRegistry.find((e) => e.id === eventId);
+  if (!event) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" not found in registry.`,
+        },
+      ],
+    };
+  }
+
+  // Set the activeEventId
+  const nextState: GameState = {
+    ...state,
+    eventHistory: {
+      ...state.eventHistory,
+      activeEventId: eventId,
+    },
+  };
+
+  return {
+    state: nextState,
+    rng,
+    events: [{ type: "ENCOUNTER_STARTED", eventId }],
+  };
+}
+
 // ── Main reducer ──────────────────────────────────────────────────────────────
 
 /**
@@ -880,6 +964,10 @@ export function applyCommand(
 
     case "CONSUME_ITEM":
       result = applyConsumeItem(state, rng, command.instanceId);
+      break;
+
+    case "ACTIVATE_EVENT":
+      result = applyActivateEvent(state, rng, command.eventId);
       break;
   }
 

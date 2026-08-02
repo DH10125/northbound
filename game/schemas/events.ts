@@ -30,6 +30,8 @@ export const EventHistorySchema = z.object({
   cooldowns: z.record(z.string(), z.number().int().min(0)),
   /** Event ID queued by a follow-up effect; null if none pending. */
   pendingFollowUp: z.string().nullable().default(null),
+  /** The currently activated/selected event ID that can be resolved; null if none active. */
+  activeEventId: z.string().nullable().default(null),
 });
 
 export type EventHistory = z.infer<typeof EventHistorySchema>;
