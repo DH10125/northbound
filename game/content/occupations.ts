@@ -325,7 +325,9 @@ export const OCCUPATIONS: ReadonlyArray<OccupationDefinition> =
   RAW_OCCUPATIONS.map((raw) => OccupationDefinitionSchema.parse(raw));
 
 /** Look up a single occupation by ID. Returns undefined if not found. */
-export function getOccupation(id: OccupationId): OccupationDefinition | undefined {
+export function getOccupation(
+  id: OccupationId,
+): OccupationDefinition | undefined {
   return OCCUPATIONS.find((o) => o.id === id);
 }
 

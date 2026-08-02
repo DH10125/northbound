@@ -11,41 +11,62 @@ import { GAME_STATE_SCHEMA_VERSION } from "../schemas/game-state";
 import { PronounsSchema, AgeRangeSchema } from "../schemas/party";
 import { OccupationIdSchema } from "../schemas/ids";
 import type { OccupationId, NodeId } from "../schemas/ids";
-import { applyAttributeDeltas, getOccupation } from "../content/occupations";
+import {
+  applyAttributeDeltas,
+  getOccupation,
+  OCCUPATION_IDS,
+} from "../content/occupations";
 
 // ── CharacterDraft schema ──────────────────────────────────────────────────────
 
-export const CharacterDraftSchema = z.object({
-  name: z.string().min(1).max(64).transform((s) => s.trim()),
-  pronouns: PronounsSchema,
-  /** Required when pronouns === "custom". Max 32 chars. */
-  customPronouns: z.string().max(32).optional(),
-  ageRange: AgeRangeSchema,
-  /** Index into the allow-listed portrait/silhouette set. */
-  portraitIndex: z.number().int().min(0).max(7),
-  occupationId: OccupationIdSchema,
-  /** Player-authored motivation text (free field, 1–256 chars). */
-  motivation: z.string().min(1).max(256).transform((s) => s.trim()),
-  /** Player-authored weakness text (free field, 1–256 chars). */
-  weakness: z.string().min(1).max(256).transform((s) => s.trim()),
-  /** Difficulty preset for the run. */
-  difficulty: z.enum(["story", "normal", "hard"]),
-  /** Deterministic RNG seed for the run. */
-  seed: z.string().min(1),
-  /** ISO-8601 wall-clock timestamp when the run was started. */
-  runStartedAt: z.string().datetime(),
-}).superRefine((draft, ctx) => {
-  if (draft.pronouns === "custom" && !draft.customPronouns?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "customPronouns is required when pronouns is 'custom'",
-      path: ["customPronouns"],
-    });
-  }
-  if (draft.pronouns !== "custom" && draft.customPronouns !== undefined) {
-    // Allow but ignore — no error, just advisory
-  }
-});
+/**
+ * Trim-then-min(1) helper: transforms whitespace first, then validates length.
+ * This ensures whitespace-only strings are rejected rather than silently emptied.
+ */
+const trimmedNonEmpty = (max: number) =>
+  z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1).max(max));
+
+export const CharacterDraftSchema = z
+  .object({
+    name: trimmedNonEmpty(64),
+    pronouns: PronounsSchema,
+    /** Required when pronouns === "custom". Max 32 chars. */
+    customPronouns: z.string().max(32).optional(),
+    ageRange: AgeRangeSchema,
+    /** Index into the allow-listed portrait/silhouette set. */
+    portraitIndex: z.number().int().min(0).max(7),
+    /**
+     * Must be one of the eight authored occupation IDs.
+     * Validated against the runtime set so unknown IDs are rejected at schema
+     * parse time rather than deferred to buildInitialGameState.
+     */
+    occupationId: OccupationIdSchema.refine(
+      (id) => (OCCUPATION_IDS as readonly string[]).includes(id),
+      { message: "occupationId must be one of the eight authored occupations" },
+    ),
+    /** Player-authored motivation text (free field, 1–256 chars). */
+    motivation: trimmedNonEmpty(256),
+    /** Player-authored weakness text (free field, 1–256 chars). */
+    weakness: trimmedNonEmpty(256),
+    /** Difficulty preset for the run. */
+    difficulty: z.enum(["story", "normal", "hard"]),
+    /** Deterministic RNG seed for the run. */
+    seed: z.string().min(1),
+    /** ISO-8601 wall-clock timestamp when the run was started. */
+    runStartedAt: z.string().datetime(),
+  })
+  .superRefine((draft, ctx) => {
+    if (draft.pronouns === "custom" && !draft.customPronouns?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "customPronouns is required when pronouns is 'custom'",
+        path: ["customPronouns"],
+      });
+    }
+  });
 
 export type CharacterDraft = z.infer<typeof CharacterDraftSchema>;
 
@@ -76,7 +97,9 @@ export function buildInitialGameState(draft: CharacterDraft): GameState {
       player: {
         name: draft.name,
         pronouns: draft.pronouns,
-        ...(draft.customPronouns ? { customPronouns: draft.customPronouns } : {}),
+        ...(draft.customPronouns
+          ? { customPronouns: draft.customPronouns }
+          : {}),
         ageRange: draft.ageRange,
         portraitIndex: draft.portraitIndex,
         occupationId: draft.occupationId as OccupationId,

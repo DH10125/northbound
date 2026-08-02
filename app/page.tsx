@@ -103,7 +103,8 @@ export default function Home() {
             Create a character
           </a>
           <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-            Early development — character creation is available; gameplay is not yet implemented.
+            Early development — character creation is available; gameplay is not
+            yet implemented.
           </p>
         </div>
       </div>

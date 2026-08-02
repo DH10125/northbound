@@ -33,11 +33,15 @@ export default function CreatePage() {
         className="flex flex-1 flex-col items-center justify-center px-4 py-16 sm:px-6 sm:py-24"
       >
         <div className="w-full max-w-2xl space-y-6 text-center">
-          <h1 className="text-3xl font-bold" style={{ color: "var(--text-primary)" }}>
+          <h1
+            className="text-3xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
             Ready, {name}.
           </h1>
           <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
-            The journey north begins. Gameplay is not yet available — check back as development continues.
+            The journey north begins. Gameplay is not yet available — check back
+            as development continues.
           </p>
           <Link
             href="/"
@@ -66,12 +70,18 @@ export default function CreatePage() {
           >
             ← Back to home
           </Link>
-          <h1 className="mt-4 text-3xl font-bold" style={{ color: "var(--text-primary)" }}>
+          <h1
+            className="mt-4 text-3xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
             Create your character
           </h1>
-          <p className="mt-2 text-base" style={{ color: "var(--text-secondary)" }}>
-            You are stranded in Pensacola. Your family farm near Butternut needs you.
-            Who you are shapes every choice between here and home.
+          <p
+            className="mt-2 text-base"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            You are stranded in Pensacola. Your family farm near Butternut needs
+            you. Who you are shapes every choice between here and home.
           </p>
         </div>
         <CharacterCreation onComplete={handleComplete} />

@@ -160,7 +160,10 @@ describe("CharacterDraftSchema", () => {
   });
 
   it("trims name whitespace", () => {
-    const r = CharacterDraftSchema.safeParse({ ...validDraft, name: "  Alex  " });
+    const r = CharacterDraftSchema.safeParse({
+      ...validDraft,
+      name: "  Alex  ",
+    });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.name).toBe("Alex");
   });
@@ -188,12 +191,60 @@ describe("CharacterDraftSchema", () => {
   });
 
   it("rejects invalid difficulty preset", () => {
-    expect(CharacterDraftSchema.safeParse({ ...validDraft, difficulty: "insane" }).success).toBe(false);
+    expect(
+      CharacterDraftSchema.safeParse({ ...validDraft, difficulty: "insane" })
+        .success,
+    ).toBe(false);
   });
 
   it("rejects portraitIndex out of range", () => {
-    expect(CharacterDraftSchema.safeParse({ ...validDraft, portraitIndex: 8 }).success).toBe(false);
-    expect(CharacterDraftSchema.safeParse({ ...validDraft, portraitIndex: -1 }).success).toBe(false);
+    expect(
+      CharacterDraftSchema.safeParse({ ...validDraft, portraitIndex: 8 })
+        .success,
+    ).toBe(false);
+    expect(
+      CharacterDraftSchema.safeParse({ ...validDraft, portraitIndex: -1 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejects whitespace-only name", () => {
+    const r = CharacterDraftSchema.safeParse({ ...validDraft, name: "   " });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects whitespace-only motivation", () => {
+    const r = CharacterDraftSchema.safeParse({
+      ...validDraft,
+      motivation: "   ",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects whitespace-only weakness", () => {
+    const r = CharacterDraftSchema.safeParse({
+      ...validDraft,
+      weakness: "   ",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejects an unknown occupationId not in the authored set", () => {
+    const r = CharacterDraftSchema.safeParse({
+      ...validDraft,
+      occupationId: "occupation.ghost",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts all eight authored occupation IDs", () => {
+    for (const occId of OCCUPATION_IDS) {
+      const r = CharacterDraftSchema.safeParse({
+        ...validDraft,
+        occupationId: occId,
+      });
+      expect(r.success, `${occId} should be accepted`).toBe(true);
+    }
   });
 });
 
@@ -228,7 +279,9 @@ describe("buildInitialGameState", () => {
   it("applies occupation attribute deltas deterministically", () => {
     const state1 = buildInitialGameState(parsedDraft);
     const state2 = buildInitialGameState(parsedDraft);
-    expect(state1.party.player.attributes).toEqual(state2.party.player.attributes);
+    expect(state1.party.player.attributes).toEqual(
+      state2.party.player.attributes,
+    );
   });
 
   it("nurse-emt has medical >= 8 after deltas", () => {
@@ -268,7 +321,10 @@ describe("buildInitialGameState", () => {
   });
 
   it("throws for unknown occupation ID", () => {
-    const badDraft = { ...parsedDraft, occupationId: "occupation.ghost" as OccupationId };
+    const badDraft = {
+      ...parsedDraft,
+      occupationId: "occupation.ghost" as OccupationId,
+    };
     expect(() => buildInitialGameState(badDraft)).toThrow();
   });
 });
