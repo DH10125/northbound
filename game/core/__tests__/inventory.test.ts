@@ -488,15 +488,15 @@ describe("advanceSpoilage", () => {
         },
       ],
     };
-    const { inventory: newInv, spoiledIds } = advanceSpoilage(inventory);
+    const { inventory: newInv, spoiledItems } = advanceSpoilage(inventory);
     const fish = newInv.storages[0]!.items.find(
       (i) => i.instanceId === "item-fish",
     );
     expect(fish!.condition).toBe(15);
-    expect(spoiledIds).toHaveLength(0);
+    expect(spoiledItems).toHaveLength(0);
   });
 
-  it("removes items that reach condition 0", () => {
+  it("retains items at condition 0 (marked spoiled, not deleted)", () => {
     const inventory = {
       storages: [
         {
@@ -506,15 +506,19 @@ describe("advanceSpoilage", () => {
               instanceId: "item-fish" as ItemInstanceId,
               definitionId: "item.food.fresh-fish" as ItemId,
               quantity: 1,
-              condition: 3, // spoilageRate = 5, 3 - 5 = 0 → removed
+              condition: 3, // spoilageRate = 5, 3 - 5 clamped to 0
             },
           ],
         },
       ],
     };
-    const { inventory: newInv, spoiledIds } = advanceSpoilage(inventory);
-    expect(newInv.storages[0]!.items).toHaveLength(0);
-    expect(spoiledIds).toContain("item-fish");
+    const { inventory: newInv, spoiledItems } = advanceSpoilage(inventory);
+    // Item retained at condition 0
+    expect(newInv.storages[0]!.items).toHaveLength(1);
+    expect(newInv.storages[0]!.items[0]!.condition).toBe(0);
+    expect(spoiledItems).toHaveLength(1);
+    expect(spoiledItems[0]!.instanceId).toBe("item-fish");
+    expect(spoiledItems[0]!.definitionId).toBe("item.food.fresh-fish");
   });
 
   it("non-perishable items are unaffected", () => {
@@ -705,5 +709,266 @@ describe("invariant protections", () => {
     );
     // State unchanged
     expect(totalItemCount(state)).toBe(5);
+  });
+});
+
+// ── Defect corrections ───────────────────────────────────────────────────────
+
+describe("partial transfer produces unique split ID (fix #1)", () => {
+  const inventory = {
+    storages: [
+      {
+        location: "backpack" as const,
+        items: [
+          {
+            instanceId: "item-p1" as ItemInstanceId,
+            definitionId: "item.food.ration" as ItemId,
+            quantity: 5,
+            condition: 100,
+          },
+        ],
+      },
+      { location: "body" as const, items: [] },
+    ],
+  };
+
+  it("partial transfer assigns deterministic split instanceId", () => {
+    const result = transferItem(
+      inventory,
+      "item-p1" as ItemInstanceId,
+      "backpack",
+      "body",
+      2,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const allIds = result.inventory.storages.flatMap((s) =>
+        s.items.map((i) => i.instanceId),
+      );
+      // Source retains original ID with reduced qty
+      expect(allIds).toContain("item-p1");
+      // Destination gets split ID
+      expect(allIds).toContain("item-p1:split");
+      // No duplicate IDs
+      expect(new Set(allIds).size).toBe(allIds.length);
+    }
+  });
+
+  it("whole transfer preserves original instanceId", () => {
+    const result = transferItem(
+      inventory,
+      "item-p1" as ItemInstanceId,
+      "backpack",
+      "body",
+      5,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const allIds = result.inventory.storages.flatMap((s) =>
+        s.items.map((i) => i.instanceId),
+      );
+      expect(allIds).toContain("item-p1");
+      expect(allIds).not.toContain("item-p1:split");
+    }
+  });
+
+  it("quantity is conserved across partial transfer", () => {
+    const result = transferItem(
+      inventory,
+      "item-p1" as ItemInstanceId,
+      "backpack",
+      "body",
+      2,
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const total = result.inventory.storages
+        .flatMap((s) => s.items)
+        .reduce((sum, i) => sum + i.quantity, 0);
+      expect(total).toBe(5);
+    }
+  });
+});
+
+describe("rejected commands preserve state byte-for-byte (fix #2)", () => {
+  const stateWithFish: GameState = {
+    ...minimalGameState,
+    runStatus: "ended-success",
+    inventory: {
+      storages: [
+        {
+          location: "backpack",
+          items: [
+            {
+              instanceId: "item-fish" as ItemInstanceId,
+              definitionId: "item.food.fresh-fish" as ItemId,
+              quantity: 1,
+              condition: 10,
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  it("rejected TRAVEL does not trigger spoilage", () => {
+    const rng = seedToState("reject-travel");
+    const { state, rng: rngAfter } = applyCommand(
+      stateWithFish,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
+    expect(JSON.stringify(state)).toBe(JSON.stringify(stateWithFish));
+    expect(rngAfter).toEqual(rng);
+  });
+
+  it("rejected REST does not trigger spoilage", () => {
+    const rng = seedToState("reject-rest");
+    const { state, rng: rngAfter } = applyCommand(
+      stateWithFish,
+      { type: "REST", hours: 4 },
+      rng,
+    );
+    expect(JSON.stringify(state)).toBe(JSON.stringify(stateWithFish));
+    expect(rngAfter).toEqual(rng);
+  });
+
+  it("rejected SCAVENGE does not trigger spoilage", () => {
+    const rng = seedToState("reject-scav");
+    const { state, rng: rngAfter } = applyCommand(
+      stateWithFish,
+      { type: "SCAVENGE" },
+      rng,
+    );
+    expect(JSON.stringify(state)).toBe(JSON.stringify(stateWithFish));
+    expect(rngAfter).toEqual(rng);
+  });
+});
+
+describe("multi-turn TRAVEL spoils once per turn (fix #3)", () => {
+  it("3-turn travel applies 3 spoilage ticks", () => {
+    const stateWithFish: GameState = {
+      ...minimalGameState,
+      inventory: {
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-fish" as ItemInstanceId,
+                definitionId: "item.food.fresh-fish" as ItemId,
+                quantity: 1,
+                condition: 50,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("multi-spoil");
+    const { state } = applyCommand(
+      stateWithFish,
+      { type: "TRAVEL", turnsToTravel: 3 },
+      rng,
+    );
+    const fish = state.inventory.storages[0]!.items.find(
+      (i) => i.instanceId === "item-fish",
+    );
+    // 50 - 5*3 = 35
+    expect(fish!.condition).toBe(35);
+  });
+
+  it("early destination stop still applies spoilage for each completed turn", () => {
+    const stateNearEnd: GameState = {
+      ...minimalGameState,
+      location: { ...minimalGameState.location, distanceRemaining: 10 },
+      inventory: {
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-fish" as ItemInstanceId,
+                definitionId: "item.food.fresh-fish" as ItemId,
+                quantity: 1,
+                condition: 50,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("early-stop");
+    const { state } = applyCommand(
+      stateNearEnd,
+      { type: "TRAVEL", turnsToTravel: 5 },
+      rng,
+    );
+    // Reached destination after 1 turn, so 1 spoilage tick
+    expect(state.runStatus).toBe("ended-success");
+    const fish = state.inventory.storages[0]!.items.find(
+      (i) => i.instanceId === "item-fish",
+    );
+    expect(fish!.condition).toBe(45); // 50 - 5*1
+  });
+
+  it("multi-turn spoilage is replay-deterministic", () => {
+    const stateWithFish: GameState = {
+      ...minimalGameState,
+      inventory: {
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-fish" as ItemInstanceId,
+                definitionId: "item.food.fresh-fish" as ItemId,
+                quantity: 1,
+                condition: 40,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("multi-replay");
+    const commands = [{ type: "TRAVEL" as const, turnsToTravel: 3 }];
+    const r1 = replay(stateWithFish, rng, commands);
+    const r2 = replay(stateWithFish, rng, commands);
+    expect(JSON.stringify(r1.state)).toBe(JSON.stringify(r2.state));
+    expect(JSON.stringify(r1.rng)).toBe(JSON.stringify(r2.rng));
+  });
+});
+
+describe("ITEM_SPOILED event always has real definitionId (fix #4)", () => {
+  it("spoilage event carries definitionId from item, never 'unknown'", () => {
+    const stateWithFish: GameState = {
+      ...minimalGameState,
+      inventory: {
+        storages: [
+          {
+            location: "backpack",
+            items: [
+              {
+                instanceId: "item-fish" as ItemInstanceId,
+                definitionId: "item.food.fresh-fish" as ItemId,
+                quantity: 1,
+                condition: 3, // will reach 0 after 1 tick (spoilageRate=5)
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("spoil-defid");
+    const { events } = applyCommand(
+      stateWithFish,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
+    const spoiledEvent = events.find((e) => e.type === "ITEM_SPOILED");
+    expect(spoiledEvent).toBeDefined();
+    expect(spoiledEvent!.definitionId).toBe("item.food.fresh-fish");
+    expect(spoiledEvent!.definitionId).not.toBe("unknown");
   });
 });

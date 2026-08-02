@@ -184,6 +184,25 @@ export function transferItem(
     }
   }
 
+  // Determine whether this is a whole-instance or partial (split) transfer.
+  const isWholeTransfer = sourceItem.quantity === quantity;
+
+  // For partial transfers, generate a deterministic split ID so that
+  // no two instances across any storage share the same instanceId.
+  const destInstanceId: ItemInstanceId = isWholeTransfer
+    ? instanceId
+    : (`${instanceId}:split` as ItemInstanceId);
+
+  // Verify the split ID doesn't already exist anywhere (invariant guard)
+  if (!isWholeTransfer) {
+    const idExists = inventory.storages.some((s) =>
+      s.items.some((i) => i.instanceId === destInstanceId),
+    );
+    if (idExists) {
+      return { ok: false, reason: "Split instance ID collision." };
+    }
+  }
+
   // Build new storages (atomic: all-or-nothing)
   const newStorages = inventory.storages.map((s, idx) => {
     if (idx === fromIdx) {
@@ -196,21 +215,27 @@ export function transferItem(
       return { ...s, items: newItems };
     }
     if (s.location === toLocation) {
-      const existing = s.items.find((i) => i.instanceId === instanceId);
-      if (existing) {
-        return {
-          ...s,
-          items: s.items.map((i) =>
-            i.instanceId === instanceId
-              ? { ...i, quantity: i.quantity + quantity }
-              : i,
-          ),
-        };
+      // For whole transfers, merge into existing compatible stack or add new entry
+      if (isWholeTransfer) {
+        const existing = s.items.find((i) => i.instanceId === instanceId);
+        if (existing) {
+          return {
+            ...s,
+            items: s.items.map((i) =>
+              i.instanceId === instanceId
+                ? { ...i, quantity: i.quantity + quantity }
+                : i,
+            ),
+          };
+        }
       }
-      // New item in destination - create a copy of the item
+      // New item in destination with the appropriate instanceId
       return {
         ...s,
-        items: [...s.items, { ...sourceItem, quantity }],
+        items: [
+          ...s.items,
+          { ...sourceItem, instanceId: destInstanceId, quantity },
+        ],
       };
     }
     return s;
@@ -220,7 +245,7 @@ export function transferItem(
   if (toIdx === -1) {
     newStorages.push({
       location: toLocation,
-      items: [{ ...sourceItem, quantity }],
+      items: [{ ...sourceItem, instanceId: destInstanceId, quantity }],
     });
   }
 
@@ -232,32 +257,33 @@ export function transferItem(
 /**
  * Advance spoilage for all perishable items by one turn.
  * Deterministic: reduces condition by the item's spoilageRate.
- * Items reaching condition 0 are marked as spoiled (condition stays at 0).
- * Returns the updated inventory and list of spoiled item instanceIds.
+ * Items reaching condition 0 are retained (marked spoiled) — never silently deleted.
+ * Returns the updated inventory and list of spoiled items (instanceId + definitionId).
  */
 export function advanceSpoilage(inventory: GameState["inventory"]): {
   inventory: GameState["inventory"];
-  spoiledIds: string[];
+  spoiledItems: Array<{ instanceId: string; definitionId: string }>;
 } {
-  const spoiledIds: string[] = [];
+  const spoiledItems: Array<{ instanceId: string; definitionId: string }> = [];
 
   const newStorages = inventory.storages.map((storage) => ({
     ...storage,
-    items: storage.items
-      .map((item) => {
-        const def = getItemDefinition(item.definitionId as ItemId);
-        if (!def || def.spoilageRate === 0) return item;
+    items: storage.items.map((item) => {
+      const def = getItemDefinition(item.definitionId as ItemId);
+      if (!def || def.spoilageRate === 0) return item;
 
-        const newCondition = Math.max(0, item.condition - def.spoilageRate);
-        if (newCondition === 0 && item.condition > 0) {
-          spoiledIds.push(item.instanceId);
-        }
-        return { ...item, condition: newCondition };
-      })
-      .filter((item) => item.condition > 0),
+      const newCondition = Math.max(0, item.condition - def.spoilageRate);
+      if (newCondition === 0 && item.condition > 0) {
+        spoiledItems.push({
+          instanceId: item.instanceId,
+          definitionId: item.definitionId,
+        });
+      }
+      return { ...item, condition: newCondition };
+    }),
   }));
 
-  return { inventory: { storages: newStorages }, spoiledIds };
+  return { inventory: { storages: newStorages }, spoiledItems };
 }
 
 // ── Consumption ──────────────────────────────────────────────────────────────

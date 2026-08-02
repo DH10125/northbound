@@ -234,6 +234,17 @@ function applyTravel(
       }),
     );
 
+    // Spoilage: one tick per accepted travel turn
+    const spoilageResult = advanceSpoilage(s.inventory);
+    s = { ...s, inventory: spoilageResult.inventory };
+    for (const spoiled of spoilageResult.spoiledItems) {
+      events.push({
+        type: "ITEM_SPOILED",
+        instanceId: spoiled.instanceId,
+        definitionId: spoiled.definitionId,
+      });
+    }
+
     // Check run completion
     if (newDistanceRemaining === 0) {
       s = { ...s, runStatus: "ended-success" };
@@ -741,30 +752,27 @@ export function applyCommand(
       break;
   }
 
-  // Advance spoilage on time-advancing commands (TRAVEL, REST, SCAVENGE)
-  if (
-    command.type === "TRAVEL" ||
-    command.type === "REST" ||
-    command.type === "SCAVENGE"
-  ) {
-    const spoilageResult = advanceSpoilage(result.state.inventory);
-    result = {
-      ...result,
-      state: { ...result.state, inventory: spoilageResult.inventory },
-      events: [
-        ...result.events,
-        ...spoilageResult.spoiledIds.map((id) => {
-          const item = state.inventory.storages
-            .flatMap((s) => s.items)
-            .find((i) => i.instanceId === id);
-          return {
+  // Advance spoilage once for REST/SCAVENGE (TRAVEL handles per-turn internally).
+  // Only on accepted commands — rejected commands must not alter state.
+  if (command.type === "REST" || command.type === "SCAVENGE") {
+    const wasRejected = result.events.some(
+      (e) => e.type === "COMMAND_REJECTED",
+    );
+    if (!wasRejected) {
+      const spoilageResult = advanceSpoilage(result.state.inventory);
+      result = {
+        ...result,
+        state: { ...result.state, inventory: spoilageResult.inventory },
+        events: [
+          ...result.events,
+          ...spoilageResult.spoiledItems.map((spoiled) => ({
             type: "ITEM_SPOILED" as const,
-            instanceId: id,
-            definitionId: item?.definitionId ?? "unknown",
-          };
-        }),
-      ],
-    };
+            instanceId: spoiled.instanceId,
+            definitionId: spoiled.definitionId,
+          })),
+        ],
+      };
+    }
   }
 
   return result;
