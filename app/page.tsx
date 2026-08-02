@@ -88,9 +88,24 @@ export default function Home() {
           </div>
         </section>
 
-        <p className="text-xs pt-4" style={{ color: "var(--text-tertiary)" }}>
-          Early development — nothing to play yet.
-        </p>
+        <div className="pt-4 flex flex-col items-center gap-3">
+          <a
+            href="/create"
+            className={[
+              "inline-flex items-center justify-center gap-2 px-5 py-2.5",
+              "text-[length:var(--text-lg)] font-semibold rounded-[var(--radius-lg)]",
+              "bg-[var(--interactive-primary)] text-[var(--interactive-primary-text)]",
+              "hover:bg-[var(--interactive-primary-hover)]",
+              "transition-colors duration-[var(--duration-fast)]",
+              "focus-visible:outline-[length:var(--focus-ring-width)] focus-visible:outline-[var(--focus-ring-color)] focus-visible:outline-offset-[var(--focus-ring-offset)]",
+            ].join(" ")}
+          >
+            Create a character
+          </a>
+          <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+            Early development — character creation is available; gameplay is not yet implemented.
+          </p>
+        </div>
       </div>
     </main>
   );
