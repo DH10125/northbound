@@ -17,6 +17,14 @@ import type { RngState } from "./rng";
 import { nextInt } from "./rng";
 import type { Command } from "./commands";
 import type { DomainEvent } from "./domain-events";
+import {
+  hoursToPhase,
+  getActionAvailability,
+  computeUpkeep,
+  tickFarmClock,
+  ACTION_TURN_HOURS,
+} from "./turn-clock";
+import type { ResolutionChange, TurnSummary } from "./turn-clock";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -32,28 +40,109 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Hours per phase slot — used to derive the current phase from elapsed hours. */
-const PHASE_HOURS = 6; // day=0-5, dusk=6-11, night=12-17, dawn=18-23 (mod 24)
-
-function hoursToPhase(hours: number): "day" | "dusk" | "night" | "dawn" {
-  const h = ((hours % 24) + 24) % 24;
-  if (h < PHASE_HOURS) return "day";
-  if (h < PHASE_HOURS * 2) return "dusk";
-  if (h < PHASE_HOURS * 3) return "night";
-  return "dawn";
-}
-
 /** Distance covered per travel turn (deterministic base + small rng variance). */
 const TRAVEL_BASE_DISTANCE = 25;
 const TRAVEL_VARIANCE = 10; // +/- 0..9
 
-/** Hours consumed per travel turn. */
-const TRAVEL_HOURS_PER_TURN = 4;
+/**
+ * Apply standard turn upkeep and farm clock tick.
+ * Returns the updated state, the changes list for TURN_RESOLVED, and
+ * the FARM_CLOCK_TICKED domain event.
+ */
+function applyTurnUpkeep(
+  state: GameState,
+  action: "TRAVEL" | "REST" | "SCAVENGE" | "WAIT",
+): { state: GameState; changes: ResolutionChange[]; farmEvent: DomainEvent } {
+  const upkeep = computeUpkeep(action);
+  const player = state.party.player;
+  const m = player.meters;
 
-/** Hours consumed per rest hour (1:1). */
-const REST_FATIGUE_RECOVERY_PER_HOUR = 5;
-const REST_HUNGER_PER_HOUR = 2;
-const REST_THIRST_PER_HOUR = 3;
+  // Compute new meter values clamped to [0, 100]
+  const newHunger = clamp(m.hunger + upkeep.hunger, 0, 100);
+  const newThirst = clamp(m.thirst + upkeep.thirst, 0, 100);
+  const newFatigue = clamp(m.fatigue + upkeep.fatigue, 0, 100);
+  const newSleepDebt = clamp(m.sleepDebt + upkeep.sleepDebt, 0, 100);
+
+  // Farm clock tick
+  const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
+
+  const changes: ResolutionChange[] = [];
+  if (newHunger !== m.hunger)
+    changes.push({
+      field: "hunger",
+      before: m.hunger,
+      after: newHunger,
+      delta: newHunger - m.hunger,
+    });
+  if (newThirst !== m.thirst)
+    changes.push({
+      field: "thirst",
+      before: m.thirst,
+      after: newThirst,
+      delta: newThirst - m.thirst,
+    });
+  if (newFatigue !== m.fatigue)
+    changes.push({
+      field: "fatigue",
+      before: m.fatigue,
+      after: newFatigue,
+      delta: newFatigue - m.fatigue,
+    });
+  if (newSleepDebt !== m.sleepDebt)
+    changes.push({
+      field: "sleepDebt",
+      before: m.sleepDebt,
+      after: newSleepDebt,
+      delta: newSleepDebt - m.sleepDebt,
+    });
+  if (newFarmClockTurns !== state.farm.clockTurns)
+    changes.push({
+      field: "farm.clockTurns",
+      before: state.farm.clockTurns,
+      after: newFarmClockTurns,
+      delta: newFarmClockTurns - state.farm.clockTurns,
+    });
+
+  const nextState: GameState = {
+    ...state,
+    party: {
+      ...state.party,
+      player: {
+        ...player,
+        meters: {
+          ...m,
+          hunger: newHunger,
+          thirst: newThirst,
+          fatigue: newFatigue,
+          sleepDebt: newSleepDebt,
+        },
+      },
+    },
+    farm: {
+      ...state.farm,
+      clockTurns: newFarmClockTurns,
+    },
+  };
+
+  const farmEvent: DomainEvent = {
+    type: "FARM_CLOCK_TICKED",
+    newClockTurns: newFarmClockTurns,
+    deadlineTurns: state.farm.deadlineTurns,
+  };
+
+  return { state: nextState, changes, farmEvent };
+}
+
+/** Build a TURN_RESOLVED event from a completed turn. */
+function buildTurnResolvedEvent(summary: TurnSummary): DomainEvent {
+  return {
+    type: "TURN_RESOLVED",
+    action: summary.action,
+    phase: summary.phase,
+    hoursElapsed: summary.hoursElapsed,
+    changes: summary.changes,
+  };
+}
 
 // ── Travel ────────────────────────────────────────────────────────────────────
 
@@ -70,13 +159,23 @@ function applyTravel(
     };
   }
 
+  // Phase-availability check (travel is discouraged in day but not banned)
+  const avail = getActionAvailability(state, "TRAVEL");
+  if (!avail.available) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: avail.reason }],
+    };
+  }
+
   let s = { ...state };
   let r = rng;
   const events: DomainEvent[] = [];
 
   for (let t = 0; t < turnsToTravel; t++) {
-    // Advance time
-    const hoursThisTurn = TRAVEL_HOURS_PER_TURN;
+    const phaseAtStart = s.world.phase;
+    const hoursThisTurn = ACTION_TURN_HOURS["TRAVEL"];
     const newElapsedHours = s.world.elapsedHours + hoursThisTurn;
 
     // Random distance variance
@@ -91,11 +190,9 @@ function applyTravel(
     const newDay = Math.floor(newElapsedHours / 24) + 1;
     const newPhase = hoursToPhase(newElapsedHours);
 
-    // Update meters: hunger and thirst increase while travelling.
-    const player = s.party.player;
-    const newHunger = clamp(player.meters.hunger + 3, 0, 100);
-    const newThirst = clamp(player.meters.thirst + 4, 0, 100);
-    const newFatigue = clamp(player.meters.fatigue + 5, 0, 100);
+    // Apply upkeep + farm clock
+    const upkeepResult = applyTurnUpkeep(s, "TRAVEL");
+    s = upkeepResult.state;
 
     s = {
       ...s,
@@ -108,18 +205,6 @@ function applyTravel(
       location: {
         ...s.location,
         distanceRemaining: newDistanceRemaining,
-      },
-      party: {
-        ...s.party,
-        player: {
-          ...player,
-          meters: {
-            ...player.meters,
-            hunger: newHunger,
-            thirst: newThirst,
-            fatigue: newFatigue,
-          },
-        },
       },
     };
 
@@ -134,6 +219,17 @@ function applyTravel(
       distanceCovered,
       newDistanceRemaining,
     });
+
+    events.push(upkeepResult.farmEvent);
+
+    events.push(
+      buildTurnResolvedEvent({
+        action: "TRAVEL",
+        phase: phaseAtStart,
+        hoursElapsed: hoursThisTurn,
+        changes: upkeepResult.changes,
+      }),
+    );
 
     // Check run completion
     if (newDistanceRemaining === 0) {
@@ -160,6 +256,16 @@ function applyRest(
     };
   }
 
+  const avail = getActionAvailability(state, "REST");
+  if (!avail.available) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: avail.reason }],
+    };
+  }
+
+  const phaseAtStart = state.world.phase;
   const events: DomainEvent[] = [];
   const player = state.party.player;
 
@@ -167,21 +273,63 @@ function applyRest(
   const newDay = Math.floor(newElapsedHours / 24) + 1;
   const newPhase = hoursToPhase(newElapsedHours);
 
+  // Use upkeep for one REST turn (canonical REST hours = 6; caller may pass any 1-12)
+  const upkeep = computeUpkeep("REST");
+  // Scale upkeep linearly to the actual hours passed
+  const scale = hours / upkeep.hours;
+  const m = player.meters;
   const newFatigue = clamp(
-    player.meters.fatigue - REST_FATIGUE_RECOVERY_PER_HOUR * hours,
+    m.fatigue + Math.round(upkeep.fatigue * scale),
     0,
     100,
   );
-  const newHunger = clamp(
-    player.meters.hunger + REST_HUNGER_PER_HOUR * hours,
+  const newHunger = clamp(m.hunger + Math.round(upkeep.hunger * scale), 0, 100);
+  const newThirst = clamp(m.thirst + Math.round(upkeep.thirst * scale), 0, 100);
+  const newSleepDebt = clamp(
+    m.sleepDebt + Math.round(upkeep.sleepDebt * scale),
     0,
     100,
   );
-  const newThirst = clamp(
-    player.meters.thirst + REST_THIRST_PER_HOUR * hours,
-    0,
-    100,
-  );
+
+  // Farm clock ticks once per accepted REST command (not per hour)
+  const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
+
+  const changes: ResolutionChange[] = [];
+  if (newFatigue !== m.fatigue)
+    changes.push({
+      field: "fatigue",
+      before: m.fatigue,
+      after: newFatigue,
+      delta: newFatigue - m.fatigue,
+    });
+  if (newHunger !== m.hunger)
+    changes.push({
+      field: "hunger",
+      before: m.hunger,
+      after: newHunger,
+      delta: newHunger - m.hunger,
+    });
+  if (newThirst !== m.thirst)
+    changes.push({
+      field: "thirst",
+      before: m.thirst,
+      after: newThirst,
+      delta: newThirst - m.thirst,
+    });
+  if (newSleepDebt !== m.sleepDebt)
+    changes.push({
+      field: "sleepDebt",
+      before: m.sleepDebt,
+      after: newSleepDebt,
+      delta: newSleepDebt - m.sleepDebt,
+    });
+  if (newFarmClockTurns !== state.farm.clockTurns)
+    changes.push({
+      field: "farm.clockTurns",
+      before: state.farm.clockTurns,
+      after: newFarmClockTurns,
+      delta: 1,
+    });
 
   events.push({
     type: "TIME_ADVANCED",
@@ -196,6 +344,21 @@ function applyRest(
     delta: newFatigue - player.meters.fatigue,
     newValue: newFatigue,
   });
+
+  events.push({
+    type: "FARM_CLOCK_TICKED",
+    newClockTurns: newFarmClockTurns,
+    deadlineTurns: state.farm.deadlineTurns,
+  });
+
+  events.push(
+    buildTurnResolvedEvent({
+      action: "REST",
+      phase: phaseAtStart,
+      hoursElapsed: hours,
+      changes,
+    }),
+  );
 
   const nextState: GameState = {
     ...state,
@@ -214,8 +377,13 @@ function applyRest(
           fatigue: newFatigue,
           hunger: newHunger,
           thirst: newThirst,
+          sleepDebt: newSleepDebt,
         },
       },
+    },
+    farm: {
+      ...state.farm,
+      clockTurns: newFarmClockTurns,
     },
   };
 
@@ -309,11 +477,32 @@ function applyScavenge(state: GameState, rng: RngState): ReducerResult {
     };
   }
 
-  // Scavenging costs time but currently has no item reward (content not loaded).
-  const hours = 3;
+  const avail = getActionAvailability(state, "SCAVENGE");
+  if (!avail.available) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: avail.reason }],
+    };
+  }
+
+  const phaseAtStart = state.world.phase;
+  const hours = ACTION_TURN_HOURS["SCAVENGE"];
   const newElapsedHours = state.world.elapsedHours + hours;
   const newDay = Math.floor(newElapsedHours / 24) + 1;
   const newPhase = hoursToPhase(newElapsedHours);
+
+  // Apply upkeep + farm clock
+  const upkeepResult = applyTurnUpkeep(state, "SCAVENGE");
+  const s = {
+    ...upkeepResult.state,
+    world: {
+      ...upkeepResult.state.world,
+      elapsedHours: newElapsedHours,
+      day: newDay,
+      phase: newPhase,
+    },
+  };
 
   const events: DomainEvent[] = [
     {
@@ -321,19 +510,16 @@ function applyScavenge(state: GameState, rng: RngState): ReducerResult {
       hours,
       newElapsedHours,
     },
+    upkeepResult.farmEvent,
+    buildTurnResolvedEvent({
+      action: "SCAVENGE",
+      phase: phaseAtStart,
+      hoursElapsed: hours,
+      changes: upkeepResult.changes,
+    }),
   ];
 
-  const nextState: GameState = {
-    ...state,
-    world: {
-      ...state.world,
-      elapsedHours: newElapsedHours,
-      day: newDay,
-      phase: newPhase,
-    },
-  };
-
-  return { state: nextState, rng, events };
+  return { state: s, rng, events };
 }
 
 // ── Choose event option ───────────────────────────────────────────────────────
