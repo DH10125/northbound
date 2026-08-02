@@ -468,7 +468,65 @@ describe("Conditions integrated with turn resolution", () => {
     const result = applyCommand(state, { type: "REST", hours: 4 }, rng);
 
     const player = result.state.party.player;
-    expect(player.meters.thirst).toBeGreaterThan(0);
+    // Dehydration mild adds thirst:3 per turn, so thirst should increase
+    // beyond the normal REST upkeep
+    const baseResult = applyCommand(
+      minimalGameState,
+      { type: "REST", hours: 4 },
+      rng,
+    );
+    expect(player.meters.thirst).toBeGreaterThan(
+      baseResult.state.party.player.meters.thirst,
+    );
+  });
+
+  it("REST slows progression for restSlowsProgression conditions", () => {
+    // Heat illness has restSlowsProgression: true, turnsToProgress: 5 at mild
+    // Without rest: progresses at turn 5. With rest: threshold doubled to 10.
+    const travelState = stateWithCondition(
+      "condition.heat-illness",
+      0,
+      false,
+      4,
+    );
+    const travelResult = applyCommand(
+      travelState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
+    const travelCond = travelResult.state.party.player.conditions[0]!;
+    // Travel (not resting) at turnsAtStage=4 → turn 5 meets threshold 5 → advances
+    expect(travelCond.stageIndex).toBe(1);
+
+    const restState = stateWithCondition("condition.heat-illness", 0, false, 4);
+    const restResult = applyCommand(restState, { type: "REST", hours: 4 }, rng);
+    const restCond = restResult.state.party.player.conditions[0]!;
+    // REST (resting) at turnsAtStage=4 → turn 5 vs threshold 10 → stays at mild
+    expect(restCond.stageIndex).toBe(0);
+  });
+
+  it("treated condition recovery advances during REST", () => {
+    // Dehydration mild: treatmentTurnsRequired = 2. Start with treated + 1 treatment turn.
+    const state = stateWithCondition("condition.dehydration", 0, true, 0);
+    // Set treatmentTurns=1 so one more tick recovers
+    const primed: GameState = {
+      ...state,
+      party: {
+        ...state.party,
+        player: {
+          ...state.party.player,
+          conditions: [
+            { ...state.party.player.conditions[0]!, treatmentTurns: 1 },
+          ],
+        },
+      },
+    };
+    const result = applyCommand(primed, { type: "REST", hours: 4 }, rng);
+    // Condition should have fully recovered (removed from array)
+    expect(result.state.party.player.conditions).toHaveLength(0);
+    expect(result.events.some((e) => e.type === "CONDITION_PROGRESS")).toBe(
+      true,
+    );
   });
 
   it("permanent modifiers persist through save schema validation", async () => {
@@ -516,6 +574,49 @@ describe("Malformed condition content", () => {
     };
     const result = ConditionDefinitionSchema.safeParse(bad);
     expect(result.success).toBe(false);
+  });
+
+  it("rejects unknown perTurnEffects meter key", () => {
+    const bad = {
+      ...CONDITIONS[0],
+      stages: {
+        ...CONDITIONS[0]!.stages,
+        mild: {
+          ...CONDITIONS[0]!.stages.mild,
+          perTurnEffects: { madeUpMeter: 5 },
+        },
+      },
+    };
+    const result = ConditionDefinitionSchema.safeParse(bad);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid permanentModifier target", () => {
+    const bad = {
+      ...CONDITIONS[0],
+      permanentModifier: {
+        target: "madeUpAttribute",
+        delta: -1,
+        label: "test",
+      },
+    };
+    const result = ConditionDefinitionSchema.safeParse(bad);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid perTurnEffects meter keys", () => {
+    const good = {
+      ...CONDITIONS[0],
+      stages: {
+        ...CONDITIONS[0]!.stages,
+        mild: {
+          ...CONDITIONS[0]!.stages.mild,
+          perTurnEffects: { fatigue: 2, thirst: 3, pain: 1 },
+        },
+      },
+    };
+    const result = ConditionDefinitionSchema.safeParse(good);
+    expect(result.success).toBe(true);
   });
 });
 

@@ -11,28 +11,43 @@
  */
 
 import { z } from "zod";
-import type { ConditionStage } from "../schemas/conditions";
+
+import { MetersSchema, AttributesSchema } from "../schemas/meters";
+
+// ── Valid key sets for content validation ─────────────────────────────────────
+
+const VALID_METER_KEYS = new Set(Object.keys(MetersSchema.shape));
+const VALID_ATTRIBUTE_KEYS = new Set(Object.keys(AttributesSchema.shape));
 
 // ── Condition definition schema ──────────────────────────────────────────────
 
-export const ConditionStageDefinitionSchema = z.object({
-  /** Symptoms visible without medical skill. */
-  symptomsBasic: z.array(z.string().min(1)),
-  /** Additional symptoms visible with medical skill >= threshold. */
-  symptomsDetailed: z.array(z.string().min(1)),
-  /** Medical skill threshold to see detailed symptoms. */
-  medicalSkillThreshold: z.number().int().min(1).max(10),
-  /** Meter effects applied per turn at this stage. */
-  perTurnEffects: z.record(z.string(), z.number().int()),
-  /** Turns until progression to next stage (0 = does not progress further). */
-  turnsToProgress: z.number().int().min(0),
-  /** Turns of treatment needed to begin recovery at this stage. */
-  treatmentTurnsRequired: z.number().int().min(1),
-  /** Whether this stage carries severe risk (telegraphed to player). */
-  severeRisk: z.boolean(),
-  /** Warning text shown when severe risk applies. */
-  severeRiskWarning: z.string().optional(),
-});
+export const ConditionStageDefinitionSchema = z
+  .object({
+    /** Symptoms visible without medical skill. */
+    symptomsBasic: z.array(z.string().min(1)),
+    /** Additional symptoms visible with medical skill >= threshold. */
+    symptomsDetailed: z.array(z.string().min(1)),
+    /** Medical skill threshold to see detailed symptoms. */
+    medicalSkillThreshold: z.number().int().min(1).max(10),
+    /** Meter effects applied per turn at this stage. */
+    perTurnEffects: z.record(z.string(), z.number().int()),
+    /** Turns until progression to next stage (0 = does not progress further). */
+    turnsToProgress: z.number().int().min(0),
+    /** Turns of treatment needed to begin recovery at this stage. */
+    treatmentTurnsRequired: z.number().int().min(1),
+    /** Whether this stage carries severe risk (telegraphed to player). */
+    severeRisk: z.boolean(),
+    /** Warning text shown when severe risk applies. */
+    severeRiskWarning: z.string().optional(),
+  })
+  .refine(
+    (stage) =>
+      Object.keys(stage.perTurnEffects).every((k) => VALID_METER_KEYS.has(k)),
+    {
+      message: `perTurnEffects keys must be valid meter names: ${[...VALID_METER_KEYS].join(", ")}`,
+      path: ["perTurnEffects"],
+    },
+  );
 
 export type ConditionStageDefinition = z.infer<
   typeof ConditionStageDefinitionSchema
@@ -65,6 +80,10 @@ export const ConditionDefinitionSchema = z.object({
       target: z.string().min(1),
       delta: z.number().int(),
       label: z.string().min(1),
+    })
+    .refine((mod) => VALID_ATTRIBUTE_KEYS.has(mod.target), {
+      message: `permanentModifier target must be a valid attribute: ${[...VALID_ATTRIBUTE_KEYS].join(", ")}`,
+      path: ["target"],
     })
     .nullable(),
 });

@@ -349,37 +349,59 @@ function applyRest(
     100,
   );
 
+  // Tick conditions (REST is resting=true, enabling rest-slowed progression)
+  const condTickResult = tickConditions(
+    player.conditions,
+    player.permanentModifiers,
+    true,
+  );
+
+  // Apply condition meter deltas on top of upkeep meters
+  let meters = {
+    ...m,
+    hunger: newHunger,
+    thirst: newThirst,
+    fatigue: newFatigue,
+    sleepDebt: newSleepDebt,
+  };
+  for (const [key, delta] of Object.entries(condTickResult.meterDeltas)) {
+    const mKey = key as keyof typeof meters;
+    if (mKey in meters) {
+      meters = { ...meters, [mKey]: clamp(meters[mKey] + delta, 0, 100) };
+    }
+  }
+
   // Farm clock ticks once per accepted REST command (not per hour)
   const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
 
   const changes: ResolutionChange[] = [];
-  if (newFatigue !== m.fatigue)
+  if (meters.fatigue !== m.fatigue)
     changes.push({
       field: "fatigue",
       before: m.fatigue,
-      after: newFatigue,
-      delta: newFatigue - m.fatigue,
+      after: meters.fatigue,
+      delta: meters.fatigue - m.fatigue,
     });
-  if (newHunger !== m.hunger)
+  if (meters.hunger !== m.hunger)
     changes.push({
       field: "hunger",
       before: m.hunger,
-      after: newHunger,
-      delta: newHunger - m.hunger,
+      after: meters.hunger,
+      delta: meters.hunger - m.hunger,
     });
-  if (newThirst !== m.thirst)
+  if (meters.thirst !== m.thirst)
     changes.push({
       field: "thirst",
       before: m.thirst,
-      after: newThirst,
-      delta: newThirst - m.thirst,
+      after: meters.thirst,
+      delta: meters.thirst - m.thirst,
     });
-  if (newSleepDebt !== m.sleepDebt)
+  if (meters.sleepDebt !== m.sleepDebt)
     changes.push({
       field: "sleepDebt",
       before: m.sleepDebt,
-      after: newSleepDebt,
-      delta: newSleepDebt - m.sleepDebt,
+      after: meters.sleepDebt,
+      delta: meters.sleepDebt - m.sleepDebt,
     });
   if (newFarmClockTurns !== state.farm.clockTurns)
     changes.push({
@@ -399,8 +421,8 @@ function applyRest(
     type: "METER_CHANGED",
     subjectId: "player",
     meter: "fatigue",
-    delta: newFatigue - player.meters.fatigue,
-    newValue: newFatigue,
+    delta: meters.fatigue - player.meters.fatigue,
+    newValue: meters.fatigue,
   });
 
   events.push({
@@ -408,6 +430,8 @@ function applyRest(
     newClockTurns: newFarmClockTurns,
     deadlineTurns: state.farm.deadlineTurns,
   });
+
+  events.push(...condTickResult.events);
 
   events.push(
     buildTurnResolvedEvent({
@@ -430,13 +454,9 @@ function applyRest(
       ...state.party,
       player: {
         ...player,
-        meters: {
-          ...player.meters,
-          fatigue: newFatigue,
-          hunger: newHunger,
-          thirst: newThirst,
-          sleepDebt: newSleepDebt,
-        },
+        meters,
+        conditions: condTickResult.conditions,
+        permanentModifiers: condTickResult.permanentModifiers,
       },
     },
     farm: {
