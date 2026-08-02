@@ -9,3 +9,4 @@ export * from "./domain-events";
 export * from "./reducer";
 export * from "./selectors";
 export * from "./replay";
+export * from "./inventory";

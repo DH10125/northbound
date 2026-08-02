@@ -89,6 +89,21 @@ export const TurnResolvedEventSchema = z.object({
   ),
 });
 
+export const ItemTransferredEventSchema = z.object({
+  type: z.literal("ITEM_TRANSFERRED"),
+  instanceId: z.string().min(1),
+  definitionId: z.string().min(1),
+  quantity: z.number().int().min(1),
+  fromLocation: z.string().min(1),
+  toLocation: z.string().min(1),
+});
+
+export const ItemSpoiledEventSchema = z.object({
+  type: z.literal("ITEM_SPOILED"),
+  instanceId: z.string().min(1),
+  definitionId: z.string().min(1),
+});
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const DomainEventSchema = z.discriminatedUnion("type", [
@@ -101,6 +116,8 @@ export const DomainEventSchema = z.discriminatedUnion("type", [
   CommandRejectedEventSchema,
   FarmClockTickedEventSchema,
   TurnResolvedEventSchema,
+  ItemTransferredEventSchema,
+  ItemSpoiledEventSchema,
 ]);
 
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
@@ -115,3 +132,5 @@ export type TravelAdvancedEvent = z.infer<typeof TravelAdvancedEventSchema>;
 export type CommandRejectedEvent = z.infer<typeof CommandRejectedEventSchema>;
 export type FarmClockTickedEvent = z.infer<typeof FarmClockTickedEventSchema>;
 export type TurnResolvedEvent = z.infer<typeof TurnResolvedEventSchema>;
+export type ItemTransferredEvent = z.infer<typeof ItemTransferredEventSchema>;
+export type ItemSpoiledEvent = z.infer<typeof ItemSpoiledEventSchema>;

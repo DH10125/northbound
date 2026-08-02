@@ -67,6 +67,35 @@ export const ScavengeCommandSchema = z
   })
   .strict();
 
+/**
+ * Transfer items between storage locations.
+ */
+export const TransferItemCommandSchema = z
+  .object({
+    type: z.literal("TRANSFER_ITEM"),
+    instanceId: z.string().min(1),
+    fromLocation: z.enum([
+      "body",
+      "backpack",
+      "vehicle",
+      "cache",
+      "settlement",
+    ]),
+    toLocation: z.enum(["body", "backpack", "vehicle", "cache", "settlement"]),
+    quantity: z.number().int().min(1).default(1),
+  })
+  .strict();
+
+/**
+ * Consume a consumable item (food, water, medicine) and apply effects.
+ */
+export const ConsumeItemCommandSchema = z
+  .object({
+    type: z.literal("CONSUME_ITEM"),
+    instanceId: z.string().min(1),
+  })
+  .strict();
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const CommandSchema = z.discriminatedUnion("type", [
@@ -75,6 +104,8 @@ export const CommandSchema = z.discriminatedUnion("type", [
   ChooseEventOptionCommandSchema,
   UseItemCommandSchema,
   ScavengeCommandSchema,
+  TransferItemCommandSchema,
+  ConsumeItemCommandSchema,
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -85,6 +116,8 @@ export type ChooseEventOptionCommand = z.infer<
 >;
 export type UseItemCommand = z.infer<typeof UseItemCommandSchema>;
 export type ScavengeCommand = z.infer<typeof ScavengeCommandSchema>;
+export type TransferItemCommand = z.infer<typeof TransferItemCommandSchema>;
+export type ConsumeItemCommand = z.infer<typeof ConsumeItemCommandSchema>;
 
 // ── Validation helper ─────────────────────────────────────────────────────────
 
