@@ -58,6 +58,7 @@ export const CharacterDraftSchema = z
     /** ISO-8601 wall-clock timestamp when the run was started. */
     runStartedAt: z.string().datetime(),
   })
+  .strict()
   .superRefine((draft, ctx) => {
     if (draft.pronouns === "custom" && !draft.customPronouns?.trim()) {
       ctx.addIssue({

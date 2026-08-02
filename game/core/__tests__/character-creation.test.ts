@@ -246,6 +246,14 @@ describe("CharacterDraftSchema", () => {
       expect(r.success, `${occId} should be accepted`).toBe(true);
     }
   });
+
+  it("rejects an object with unknown extra keys (strict mode)", () => {
+    const r = CharacterDraftSchema.safeParse({
+      ...validDraft,
+      unknownField: "surprise",
+    });
+    expect(r.success).toBe(false);
+  });
 });
 
 // ── buildInitialGameState ─────────────────────────────────────────────────────
@@ -326,5 +334,13 @@ describe("buildInitialGameState", () => {
       occupationId: "occupation.ghost" as OccupationId,
     };
     expect(() => buildInitialGameState(badDraft)).toThrow();
+  });
+
+  it("produces byte-identical serialized output for two calls with the same draft", () => {
+    // Proves buildInitialGameState is purely deterministic: same input → same full
+    // state object, not just same attributes.
+    const state1 = buildInitialGameState(parsedDraft);
+    const state2 = buildInitialGameState(parsedDraft);
+    expect(JSON.stringify(state1)).toBe(JSON.stringify(state2));
   });
 });

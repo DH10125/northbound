@@ -239,12 +239,15 @@ describe("CharacterCreation – occupation step", () => {
   it("arrow keys move focus between occupation radios", async () => {
     const user = userEvent.setup();
     goToOccupation();
-    const radios = screen.getAllByRole("radio");
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    // Focus and select the first occupation radio
     radios[0]!.focus();
+    await user.keyboard(" ");
+    expect(radios[0]!.checked).toBe(true);
+    // ArrowDown should move to the next radio in the group
     await user.keyboard("{ArrowDown}");
-    // After ArrowDown the browser typically moves focus to next radio in the group.
-    // In jsdom the focus shift may not auto-advance, but we can assert the radio group exists.
-    expect(radios).toHaveLength(8);
+    expect(document.activeElement).toBe(radios[1]);
+    expect(radios[1]!.checked).toBe(true);
   });
 });
 
@@ -479,16 +482,24 @@ describe("CharacterCreation – keyboard navigation", () => {
     expect(heHim.checked).toBe(true);
   });
 
-  it("tab sequence reaches the Next button from the name field", () => {
+  it("tab sequence from name field moves focus through interactive elements to Next", async () => {
+    const user = userEvent.setup();
     setup();
     const nameInput = screen.getByRole("textbox", { name: /name/i });
     nameInput.focus();
-    // Tab through radio groups to reach Next
-    // We just verify Next button is focusable and reachable in the document
+    await user.type(nameInput, "Alex");
+    // Tab past the radio group and any other controls to land on Next
+    // Tab enough times to reach the Next button (generous upper bound)
     const nextBtn = screen.getByRole("button", { name: /next/i });
-    expect(nextBtn).not.toHaveAttribute("disabled");
-    nextBtn.focus();
-    expect(document.activeElement).toBe(nextBtn);
+    let landed = false;
+    for (let i = 0; i < 20; i++) {
+      await user.tab();
+      if (document.activeElement === nextBtn) {
+        landed = true;
+        break;
+      }
+    }
+    expect(landed).toBe(true);
   });
 });
 
