@@ -11,3 +11,4 @@ export * from "./selectors";
 export * from "./replay";
 export * from "./inventory";
 export * from "./route-resolution";
+export * from "./event-engine";

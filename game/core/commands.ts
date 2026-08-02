@@ -108,6 +108,16 @@ export const ConsumeItemCommandSchema = z
   })
   .strict();
 
+/**
+ * Activate an event for resolution. Sets activeEventId so that
+ * CHOOSE_EVENT_OPTION can authorize the choice.
+ */
+export const ActivateEventCommandSchema = z
+  .object({
+    type: z.literal("ACTIVATE_EVENT"),
+  })
+  .strict();
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const CommandSchema = z.discriminatedUnion("type", [
@@ -119,6 +129,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
   ScavengeCommandSchema,
   TransferItemCommandSchema,
   ConsumeItemCommandSchema,
+  ActivateEventCommandSchema,
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;

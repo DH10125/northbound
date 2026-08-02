@@ -29,6 +29,17 @@ import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
 import type { StorageLocation } from "./inventory-types";
 import type { ItemInstanceId } from "../schemas/ids";
 import { applyChooseRoute } from "./route-resolution";
+import {
+  resolveEventChoice,
+  evaluateCondition,
+  filterCandidates,
+  selectEvent,
+} from "./event-engine";
+import type { EventDefinition } from "../content/event-definitions";
+import {
+  EventDefinitionSchema,
+  validateEventRegistry,
+} from "../content/event-definitions";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -539,6 +550,51 @@ function applyScavenge(state: GameState, rng: RngState): ReducerResult {
 
 // ── Choose event option ───────────────────────────────────────────────────────
 
+/** Content registry used by the event engine. Set via setEventRegistry(). */
+let eventRegistry: ReadonlyArray<EventDefinition> = [];
+
+/**
+ * Register event definitions for use by the reducer.
+ * Parses each definition with EventDefinitionSchema and runs registry
+ * validation (duplicates, follow-up references, cycles).
+ * Only replaces the registry on total success; failure preserves the
+ * previous registry and returns actionable errors.
+ */
+export function setEventRegistry(
+  rawEvents: ReadonlyArray<unknown>,
+): { ok: true } | { ok: false; errors: string[] } {
+  // Parse each definition
+  const parsed: EventDefinition[] = [];
+  const parseErrors: string[] = [];
+  for (let i = 0; i < rawEvents.length; i++) {
+    const result = EventDefinitionSchema.safeParse(rawEvents[i]);
+    if (result.success) {
+      parsed.push(result.data);
+    } else {
+      parseErrors.push(
+        `Event[${i}]: ${result.error.issues.map((iss) => `${iss.path.join(".")}: ${iss.message}`).join("; ")}`,
+      );
+    }
+  }
+  if (parseErrors.length > 0) {
+    return { ok: false, errors: parseErrors };
+  }
+
+  // Run registry-level validation
+  const registryResult = validateEventRegistry(parsed);
+  if (!registryResult.valid) {
+    return { ok: false, errors: registryResult.errors };
+  }
+
+  eventRegistry = parsed;
+  return { ok: true };
+}
+
+/** Get the current event registry (for testing). */
+export function getEventRegistry(): ReadonlyArray<EventDefinition> {
+  return eventRegistry;
+}
+
 function applyChooseEventOption(
   state: GameState,
   rng: RngState,
@@ -553,25 +609,157 @@ function applyChooseEventOption(
     };
   }
 
-  // Content-free stub: record the encounter in event history.
-  const entry = {
-    eventId: eventId as import("../schemas/ids").EventId,
-    chosenOptionId: optionId,
-    resolvedAtHour: state.world.elapsedHours,
-    flagsSet: [] as string[],
+  // Look up event definition
+  const event = eventRegistry.find((e) => e.id === eventId);
+  if (!event) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" not found in registry.`,
+        },
+      ],
+    };
+  }
+
+  // ── Resolution legitimacy checks ──────────────────────────────────────────
+
+  // If there is a pendingFollowUp, only that event can be resolved next
+  if (
+    state.eventHistory.pendingFollowUp !== null &&
+    state.eventHistory.pendingFollowUp !== eventId
+  ) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Pending follow-up "${state.eventHistory.pendingFollowUp}" must be resolved first.`,
+        },
+      ],
+    };
+  }
+
+  // Active-event authorization: must be the pendingFollowUp or activeEventId
+  const isPendingFollowUp = state.eventHistory.pendingFollowUp === eventId;
+  if (!isPendingFollowUp && state.eventHistory.activeEventId !== eventId) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" is not the active or pending event.`,
+        },
+      ],
+    };
+  }
+
+  // Once-only: cannot resolve if already in history
+  if (event.once) {
+    if (state.eventHistory.entries.some((e) => e.eventId === eventId)) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" is once-only and already resolved.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Cooldown check
+  const currentTurn = Math.floor(state.world.elapsedHours / 4);
+  if (event.cooldownTurns != null && event.cooldownTurns > 0) {
+    const lastTurn = state.eventHistory.cooldowns[eventId];
+    if (lastTurn != null && currentTurn - lastTurn < event.cooldownTurns) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" is on cooldown.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Trigger condition must still be met (unless it's a pending follow-up)
+  if (state.eventHistory.pendingFollowUp !== eventId) {
+    if (!evaluateCondition(event.trigger, state)) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" trigger conditions not met.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Prevent duplicate resolution in same hour
+  const alreadyResolved = state.eventHistory.entries.some(
+    (e) =>
+      e.eventId === eventId && e.resolvedAtHour === state.world.elapsedHours,
+  );
+  if (alreadyResolved) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" already resolved this turn.`,
+        },
+      ],
+    };
+  }
+
+  // Clear pendingFollowUp and activeEventId before resolving (they will be set again if this event chains)
+  let stateForResolution = state;
+  if (state.eventHistory.pendingFollowUp === eventId) {
+    stateForResolution = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        pendingFollowUp: null,
+        activeEventId: null,
+      },
+    };
+  } else {
+    stateForResolution = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        activeEventId: null,
+      },
+    };
+  }
+
+  const result = resolveEventChoice(
+    event,
+    optionId,
+    stateForResolution,
+    rng,
+    currentTurn,
+  );
+
+  return {
+    state: result.state,
+    rng: result.rng,
+    events: result.events,
   };
-
-  const nextState: GameState = {
-    ...state,
-    eventHistory: {
-      ...state.eventHistory,
-      entries: [...state.eventHistory.entries, entry],
-    },
-  };
-
-  const events: DomainEvent[] = [{ type: "ENCOUNTER_STARTED", eventId }];
-
-  return { state: nextState, rng, events };
 }
 
 // ── Transfer item ────────────────────────────────────────────────────────────
@@ -696,6 +884,88 @@ function applyConsumeItem(
   return { state: nextState, rng, events };
 }
 
+// ── Activate event ────────────────────────────────────────────────────────────
+
+function applyActivateEvent(state: GameState, rng: RngState): ReducerResult {
+  if (state.runStatus !== "active") {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: "Run is not active." }],
+    };
+  }
+
+  // If a follow-up is pending, activate it directly (deterministic chain)
+  if (state.eventHistory.pendingFollowUp !== null) {
+    const followUpId = state.eventHistory.pendingFollowUp;
+    const nextState: GameState = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        activeEventId: followUpId,
+        pendingFollowUp: null,
+      },
+    };
+    return {
+      state: nextState,
+      rng,
+      events: [{ type: "ENCOUNTER_STARTED", eventId: followUpId }],
+    };
+  }
+
+  // Already have an active event — reject without consuming RNG
+  if (state.eventHistory.activeEventId !== null) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${state.eventHistory.activeEventId}" is already active.`,
+        },
+      ],
+    };
+  }
+
+  // Perform deterministic candidate filtering and weighted selection
+  const currentTurn = Math.floor(state.world.elapsedHours / 4);
+  const candidates = filterCandidates(eventRegistry, state, currentTurn);
+
+  if (candidates.length === 0) {
+    return {
+      state,
+      rng,
+      events: [{ type: "NO_EVENT" }],
+    };
+  }
+
+  const [nextRng, selectionResult] = selectEvent(candidates, rng);
+
+  if (selectionResult.type === "no-event") {
+    return {
+      state,
+      rng: nextRng,
+      events: [{ type: "NO_EVENT" }],
+    };
+  }
+
+  // Set the activeEventId to the deterministically selected event
+  const selectedId = selectionResult.event.id;
+  const nextState: GameState = {
+    ...state,
+    eventHistory: {
+      ...state.eventHistory,
+      activeEventId: selectedId,
+    },
+  };
+
+  return {
+    state: nextState,
+    rng: nextRng,
+    events: [{ type: "ENCOUNTER_STARTED", eventId: selectedId }],
+  };
+}
+
 // ── Main reducer ──────────────────────────────────────────────────────────────
 
 /**
@@ -754,6 +1024,10 @@ export function applyCommand(
 
     case "CONSUME_ITEM":
       result = applyConsumeItem(state, rng, command.instanceId);
+      break;
+
+    case "ACTIVATE_EVENT":
+      result = applyActivateEvent(state, rng);
       break;
   }
 
