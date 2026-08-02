@@ -84,4 +84,3 @@ export type EncounterStartedEvent = z.infer<typeof EncounterStartedEventSchema>;
 export type MeterChangedEvent = z.infer<typeof MeterChangedEventSchema>;
 export type TravelAdvancedEvent = z.infer<typeof TravelAdvancedEventSchema>;
 export type CommandRejectedEvent = z.infer<typeof CommandRejectedEventSchema>;
-

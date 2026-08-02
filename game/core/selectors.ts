@@ -42,7 +42,14 @@ export function totalItemCount(state: GameState): number {
 export function findItemInstance(
   state: GameState,
   instanceId: string,
-): { instanceId: string; definitionId: string; quantity: number; condition: number } | undefined {
+):
+  | {
+      instanceId: string;
+      definitionId: string;
+      quantity: number;
+      condition: number;
+    }
+  | undefined {
   return state.inventory.storages
     .flatMap((s) => s.items)
     .find((i) => i.instanceId === instanceId);
@@ -68,7 +75,10 @@ export function journeyProgress(state: GameState): number {
   // For now, we use a fixed max distance from the fixture (1500 units).
   // In a real implementation this would come from authored route data.
   const MAX_DISTANCE = 1500;
-  return Math.min(1, (MAX_DISTANCE - state.location.distanceRemaining) / MAX_DISTANCE);
+  return Math.min(
+    1,
+    (MAX_DISTANCE - state.location.distanceRemaining) / MAX_DISTANCE,
+  );
 }
 
 /** True if the party has reached the destination. */

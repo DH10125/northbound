@@ -134,12 +134,18 @@ describe("nextInt", () => {
   it("throws for Number.MAX_SAFE_INTEGER + 1 (unsafe integer)", () => {
     const s = seedToState("ni-unsafe");
     // Number.MAX_SAFE_INTEGER + 1 is not isSafeInteger
-    expect(() => nextInt(s, 0, Number.MAX_SAFE_INTEGER + 1)).toThrow(RangeError);
+    expect(() => nextInt(s, 0, Number.MAX_SAFE_INTEGER + 1)).toThrow(
+      RangeError,
+    );
   });
 
   it("does not consume state on error", () => {
     const s = seedToState("ni-no-consume");
-    try { nextInt(s, 1.5, 5); } catch { /* expected */ }
+    try {
+      nextInt(s, 1.5, 5);
+    } catch {
+      /* expected */
+    }
     // The state is unchanged — calling again with valid args yields the same result
     // as if the error call never happened.
     const [, v1] = nextInt(s, 0, 100);
@@ -203,19 +209,27 @@ describe("weightedChoice", () => {
 
   it("throws for Infinity weight", () => {
     const s = seedToState("wc-inf");
-    expect(() => weightedChoice(s, ["a", "b"], [Infinity, 1])).toThrow(RangeError);
+    expect(() => weightedChoice(s, ["a", "b"], [Infinity, 1])).toThrow(
+      RangeError,
+    );
   });
 
   it("throws when sum of large finite weights overflows to Infinity", () => {
     // Two weights that individually pass isFinite but sum to Infinity.
     const s = seedToState("wc-overflow");
     const huge = Number.MAX_VALUE;
-    expect(() => weightedChoice(s, ["a", "b"], [huge, huge])).toThrow(RangeError);
+    expect(() => weightedChoice(s, ["a", "b"], [huge, huge])).toThrow(
+      RangeError,
+    );
   });
 
   it("does not consume state on validation error", () => {
     const s = seedToState("wc-no-consume");
-    try { weightedChoice(s, ["a", "b"], [NaN, 1]); } catch { /* expected */ }
+    try {
+      weightedChoice(s, ["a", "b"], [NaN, 1]);
+    } catch {
+      /* expected */
+    }
     const [, v1] = nextFloat(s);
     const [, v2] = nextFloat(s);
     expect(v1).toBe(v2);
@@ -287,7 +301,11 @@ describe("roll", () => {
 
   it("does not consume state on error", () => {
     const s = seedToState("roll-no-consume");
-    try { roll(s, 0); } catch { /* expected */ }
+    try {
+      roll(s, 0);
+    } catch {
+      /* expected */
+    }
     const [, v1] = nextFloat(s);
     const [, v2] = nextFloat(s);
     expect(v1).toBe(v2);
@@ -345,7 +363,11 @@ describe("parseCommand", () => {
   });
 
   it("rejects USE_ITEM with extra field (strict schema)", () => {
-    const r = parseCommand({ type: "USE_ITEM", instanceId: "item-abc", exploit: 1 });
+    const r = parseCommand({
+      type: "USE_ITEM",
+      instanceId: "item-abc",
+      exploit: 1,
+    });
     expect(r.ok).toBe(false);
   });
 
@@ -362,7 +384,11 @@ describe("parseCommand", () => {
   it("malformed command does not mutate state or RNG", () => {
     // Prove the state is unchanged by re-applying after a bad parse
     const rng = seedToState("cmd-strict");
-    const bad = parseCommand({ type: "TRAVEL", turnsToTravel: 1, injected: "evil" });
+    const bad = parseCommand({
+      type: "TRAVEL",
+      turnsToTravel: 1,
+      injected: "evil",
+    });
     expect(bad.ok).toBe(false);
     // RNG state is untouched — applyCommand was never called
     const [, v1] = nextFloat(rng);
@@ -384,7 +410,11 @@ describe("applyCommand – immutability", () => {
   it("invalid command leaves state byte-equivalent", () => {
     const rng = seedToState("inv-test");
     // USE_ITEM with non-existent instanceId
-    const cmd = { type: "USE_ITEM" as const, instanceId: "ghost-item", quantity: 1 };
+    const cmd = {
+      type: "USE_ITEM" as const,
+      instanceId: "ghost-item",
+      quantity: 1,
+    };
     const { state: next, events } = applyCommand(minimalGameState, cmd, rng);
     expect(JSON.stringify(next)).toBe(JSON.stringify(minimalGameState));
     expect(events[0]?.type).toBe("COMMAND_REJECTED");
@@ -392,7 +422,11 @@ describe("applyCommand – immutability", () => {
 
   it("invalid command leaves RNG byte-equivalent", () => {
     const rng = seedToState("inv-rng-test");
-    const cmd = { type: "USE_ITEM" as const, instanceId: "ghost-item", quantity: 1 };
+    const cmd = {
+      type: "USE_ITEM" as const,
+      instanceId: "ghost-item",
+      quantity: 1,
+    };
     const { rng: nextRng } = applyCommand(minimalGameState, cmd, rng);
     expect(nextRng).toEqual(rng);
   });
@@ -414,7 +448,9 @@ describe("applyCommand – TRAVEL", () => {
     const rng = seedToState("travel-hours");
     const cmd = { type: "TRAVEL" as const, turnsToTravel: 1 };
     const { state } = applyCommand(minimalGameState, cmd, rng);
-    expect(state.world.elapsedHours).toBeGreaterThan(minimalGameState.world.elapsedHours);
+    expect(state.world.elapsedHours).toBeGreaterThan(
+      minimalGameState.world.elapsedHours,
+    );
   });
 
   it("reduces distanceRemaining", () => {
@@ -583,8 +619,16 @@ describe("diffReplay", () => {
     // With different initial RNG the initial fingerprint will differ, so
     // firstDivergingTurn will be -1 (initial check), not 0.
     const commands = [{ type: "TRAVEL" as const, turnsToTravel: 1 }];
-    const r1 = replay(minimalGameState, seedToState("seed-diverge-x"), commands);
-    const r2 = replay(minimalGameState, seedToState("seed-diverge-y"), commands);
+    const r1 = replay(
+      minimalGameState,
+      seedToState("seed-diverge-x"),
+      commands,
+    );
+    const r2 = replay(
+      minimalGameState,
+      seedToState("seed-diverge-y"),
+      commands,
+    );
 
     const report = diffReplay(r1, r2);
     // Seeds differ → initial RNG fingerprints differ → diverged at -1
@@ -668,8 +712,12 @@ describe("diffReplay", () => {
     // in the command applied. We manually construct snapshots to isolate this.
     const rng = seedToState("cmd-diff");
     // Apply REST — returns same distance but advances time/fatigue.
-    const r1 = replay(minimalGameState, rng, [{ type: "REST" as const, hours: 1 }]);
-    const r2 = replay(minimalGameState, rng, [{ type: "REST" as const, hours: 2 }]);
+    const r1 = replay(minimalGameState, rng, [
+      { type: "REST" as const, hours: 1 },
+    ]);
+    const r2 = replay(minimalGameState, rng, [
+      { type: "REST" as const, hours: 2 },
+    ]);
     // hours:1 vs hours:2 — states will differ, but we also check command field.
     const report = diffReplay(r1, r2);
     expect(report.diverged).toBe(true);

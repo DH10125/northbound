@@ -133,7 +133,8 @@ export function diffReplay(a: ReplayResult, b: ReplayResult): DivergenceReport {
       commandType: "(initial)",
       turnRecordA: a.initialFingerprint,
       turnRecordB: b.initialFingerprint,
-      message: "Replay diverged: initial state or RNG differs before any command.",
+      message:
+        "Replay diverged: initial state or RNG differs before any command.",
     };
   }
 

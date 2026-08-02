@@ -35,9 +35,7 @@ function clamp(value: number, min: number, max: number): number {
 /** Hours per phase slot — used to derive the current phase from elapsed hours. */
 const PHASE_HOURS = 6; // day=0-5, dusk=6-11, night=12-17, dawn=18-23 (mod 24)
 
-function hoursToPhase(
-  hours: number,
-): "day" | "dusk" | "night" | "dawn" {
+function hoursToPhase(hours: number): "day" | "dusk" | "night" | "dawn" {
   const h = ((hours % 24) + 24) % 24;
   if (h < PHASE_HOURS) return "day";
   if (h < PHASE_HOURS * 2) return "dusk";
@@ -85,7 +83,10 @@ function applyTravel(
     let variance: number;
     [r, variance] = nextInt(r, 0, TRAVEL_VARIANCE - 1);
     const distanceCovered = TRAVEL_BASE_DISTANCE + variance;
-    const newDistanceRemaining = Math.max(0, s.location.distanceRemaining - distanceCovered);
+    const newDistanceRemaining = Math.max(
+      0,
+      s.location.distanceRemaining - distanceCovered,
+    );
 
     const newDay = Math.floor(newElapsedHours / 24) + 1;
     const newPhase = hoursToPhase(newElapsedHours);
@@ -367,9 +368,7 @@ function applyChooseEventOption(
     },
   };
 
-  const events: DomainEvent[] = [
-    { type: "ENCOUNTER_STARTED", eventId },
-  ];
+  const events: DomainEvent[] = [{ type: "ENCOUNTER_STARTED", eventId }];
 
   return { state: nextState, rng, events };
 }
