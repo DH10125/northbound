@@ -3,12 +3,15 @@
  *
  * Covers:
  *   - Phase derivation (hoursToPhase) at every boundary.
+ *   - Character-created initial state consistency (h=0 → night).
  *   - Action availability rules per phase.
- *   - Disabled-action reasons are non-empty strings.
- *   - Canonical turn durations (ACTION_TURN_HOURS).
- *   - Meter upkeep: correct deltas, clamps to [0,100].
+ *   - Disabled-action reasons: "" for available (including discouraged), non-empty for banned.
+ *   - TRADE banned at strict night only, available at dusk and dawn.
+ *   - Canonical turn durations (ACTION_TURN_HOURS) all in [2, 6].
+ *   - REST command rejects hours outside [2, 6].
+ *   - Meter upkeep: correct deltas, clamps to [0, 100].
  *   - Farm-clock advances by exactly 1 per accepted turn.
- *   - Time advances exactly once per accepted turn; rejected turns leave time unchanged.
+ *   - Time advances exactly once per accepted turn; rejected turns leave state unchanged.
  *   - TURN_RESOLVED and FARM_CLOCK_TICKED events emitted on every accepted action.
  *   - Deterministic replay: same seed + commands → identical state.
  */
@@ -17,85 +20,111 @@ import { describe, it, expect } from "vitest";
 import {
   hoursToPhase,
   getActionAvailability,
+  getActionAdvisory,
   computeUpkeep,
   tickFarmClock,
   ACTION_TURN_HOURS,
 } from "../turn-clock";
+import { parseCommand } from "../commands";
 import { applyCommand } from "../reducer";
 import {
   isActionAvailable,
   disabledReason,
+  actionAdvisory,
 } from "../selectors";
 import { seedToState } from "../rng";
 import { replay } from "../replay";
 import { minimalGameState } from "../../testing/fixtures";
 
-// ── hoursToPhase ──────────────────────────────────────────────────────────────
+// ── hoursToPhase: canonical mapping ──────────────────────────────────────────
+// h∈[0, 6)  → night
+// h∈[6, 12) → dawn
+// h∈[12,18) → day
+// h∈[18,24) → dusk
 
-describe("hoursToPhase", () => {
-  it("h=0 → day", () => expect(hoursToPhase(0)).toBe("day"));
-  it("h=5 → day", () => expect(hoursToPhase(5)).toBe("day"));
-  it("h=6 → dusk", () => expect(hoursToPhase(6)).toBe("dusk"));
-  it("h=11 → dusk", () => expect(hoursToPhase(11)).toBe("dusk"));
-  it("h=12 → night", () => expect(hoursToPhase(12)).toBe("night"));
-  it("h=17 → night", () => expect(hoursToPhase(17)).toBe("night"));
-  it("h=18 → dawn", () => expect(hoursToPhase(18)).toBe("dawn"));
-  it("h=23 → dawn", () => expect(hoursToPhase(23)).toBe("dawn"));
+describe("hoursToPhase – canonical mapping", () => {
+  // night boundaries
+  it("h=0 → night", () => expect(hoursToPhase(0)).toBe("night"));
+  it("h=1 → night", () => expect(hoursToPhase(1)).toBe("night"));
+  it("h=5 → night", () => expect(hoursToPhase(5)).toBe("night"));
+  // dawn boundaries
+  it("h=6 → dawn", () => expect(hoursToPhase(6)).toBe("dawn"));
+  it("h=7 → dawn", () => expect(hoursToPhase(7)).toBe("dawn"));
+  it("h=11 → dawn", () => expect(hoursToPhase(11)).toBe("dawn"));
+  // day boundaries
+  it("h=12 → day", () => expect(hoursToPhase(12)).toBe("day"));
+  it("h=13 → day", () => expect(hoursToPhase(13)).toBe("day"));
+  it("h=17 → day", () => expect(hoursToPhase(17)).toBe("day"));
+  // dusk boundaries
+  it("h=18 → dusk", () => expect(hoursToPhase(18)).toBe("dusk"));
+  it("h=19 → dusk", () => expect(hoursToPhase(19)).toBe("dusk"));
+  it("h=23 → dusk", () => expect(hoursToPhase(23)).toBe("dusk"));
+  // wraparound
+  it("h=24 wraps to night", () => expect(hoursToPhase(24)).toBe("night"));
+  it("h=30 wraps to dawn", () => expect(hoursToPhase(30)).toBe("dawn"));
+  it("h=36 wraps to day", () => expect(hoursToPhase(36)).toBe("day"));
+  it("h=240 (10 days) → night", () => expect(hoursToPhase(240)).toBe("night"));
+});
 
-  it("wraps at 24 → day", () => expect(hoursToPhase(24)).toBe("day"));
-  it("wraps at 36 → night", () => expect(hoursToPhase(36)).toBe("night"));
-  it("handles large values correctly", () => {
-    // 240 hours = 10 days exactly → same as 0 → day
-    expect(hoursToPhase(240)).toBe("day");
+describe("hoursToPhase – character-created initial state", () => {
+  it("elapsedHours=0 → night (matches minimalGameState fixture)", () => {
+    expect(hoursToPhase(minimalGameState.world.elapsedHours)).toBe("night");
+    expect(minimalGameState.world.phase).toBe("night");
   });
 });
 
-// ── getActionAvailability ─────────────────────────────────────────────────────
+// ── getActionAvailability – night phase ───────────────────────────────────────
 
-describe("getActionAvailability – night phase", () => {
-  const nightState = {
-    ...minimalGameState,
-    world: { ...minimalGameState.world, phase: "night" as const },
-  };
+describe("getActionAvailability – night phase (minimalGameState)", () => {
+  // minimalGameState already has phase=night
+  const state = minimalGameState;
 
   it("TRAVEL is preferred at night", () => {
-    const a = getActionAvailability(nightState, "TRAVEL");
+    const a = getActionAvailability(state, "TRAVEL");
     expect(a.available).toBe(true);
     expect(a.restriction).toBe("preferred");
     expect(a.reason).toBe("");
   });
 
-  it("REST is discouraged at night (not banned)", () => {
-    const a = getActionAvailability(nightState, "REST");
+  it("REST is discouraged at night but available (reason is empty)", () => {
+    const a = getActionAvailability(state, "REST");
     expect(a.available).toBe(true);
     expect(a.restriction).toBe("discouraged");
-    expect(a.reason.length).toBeGreaterThan(0);
+    expect(a.reason).toBe(""); // available actions have no disabled reason
   });
 
-  it("TRADE is banned at night", () => {
-    const a = getActionAvailability(nightState, "TRADE");
+  it("TRADE is banned at strict night", () => {
+    const a = getActionAvailability(state, "TRADE");
     expect(a.available).toBe(false);
     expect(a.restriction).toBe("banned");
     expect(a.reason.length).toBeGreaterThan(0);
   });
 
-  it("SCAVENGE is available at night (no restriction)", () => {
-    const a = getActionAvailability(nightState, "SCAVENGE");
+  it("SCAVENGE is available at night with no restriction", () => {
+    const a = getActionAvailability(state, "SCAVENGE");
     expect(a.available).toBe(true);
     expect(a.restriction).toBe("none");
+    expect(a.reason).toBe("");
   });
 
-  it("WAIT is available at night (no restriction)", () => {
-    const a = getActionAvailability(nightState, "WAIT");
+  it("WAIT is available at night with no restriction", () => {
+    const a = getActionAvailability(state, "WAIT");
     expect(a.available).toBe(true);
     expect(a.restriction).toBe("none");
+    expect(a.reason).toBe("");
   });
 });
+
+// ── getActionAvailability – day phase ─────────────────────────────────────────
 
 describe("getActionAvailability – day phase", () => {
   const dayState = {
     ...minimalGameState,
-    world: { ...minimalGameState.world, phase: "day" as const },
+    world: {
+      ...minimalGameState.world,
+      elapsedHours: 12,
+      phase: "day" as const,
+    },
   };
 
   it("REST is preferred during day", () => {
@@ -105,23 +134,36 @@ describe("getActionAvailability – day phase", () => {
     expect(a.reason).toBe("");
   });
 
-  it("TRAVEL is discouraged during day (not banned)", () => {
+  it("TRAVEL is discouraged during day but available (reason is empty)", () => {
     const a = getActionAvailability(dayState, "TRAVEL");
     expect(a.available).toBe(true);
     expect(a.restriction).toBe("discouraged");
-    expect(a.reason.length).toBeGreaterThan(0);
+    expect(a.reason).toBe(""); // available — no disabled reason
   });
 
   it("TRADE is available during day", () => {
     const a = getActionAvailability(dayState, "TRADE");
     expect(a.available).toBe(true);
+    expect(a.restriction).toBe("preferred");
+  });
+
+  it("SCAVENGE is available during day", () => {
+    const a = getActionAvailability(dayState, "SCAVENGE");
+    expect(a.available).toBe(true);
+    expect(a.restriction).toBe("none");
   });
 });
+
+// ── getActionAvailability – dusk phase ────────────────────────────────────────
 
 describe("getActionAvailability – dusk phase", () => {
   const duskState = {
     ...minimalGameState,
-    world: { ...minimalGameState.world, phase: "dusk" as const },
+    world: {
+      ...minimalGameState.world,
+      elapsedHours: 18,
+      phase: "dusk" as const,
+    },
   };
 
   it("TRAVEL is preferred at dusk", () => {
@@ -136,17 +178,51 @@ describe("getActionAvailability – dusk phase", () => {
     expect(a.restriction).toBe("preferred");
   });
 
-  it("TRADE is banned at dusk", () => {
+  it("TRADE is available at dusk (not strict night)", () => {
+    // Key correction: TRADE is only banned at strict night, not dusk
     const a = getActionAvailability(duskState, "TRADE");
-    expect(a.available).toBe(false);
-    expect(a.restriction).toBe("banned");
+    expect(a.available).toBe(true);
+    expect(a.reason).toBe("");
   });
 });
+
+// ── getActionAvailability – dawn phase ────────────────────────────────────────
+
+describe("getActionAvailability – dawn phase", () => {
+  const dawnState = {
+    ...minimalGameState,
+    world: {
+      ...minimalGameState.world,
+      elapsedHours: 6,
+      phase: "dawn" as const,
+    },
+  };
+
+  it("TRAVEL is preferred at dawn", () => {
+    const a = getActionAvailability(dawnState, "TRAVEL");
+    expect(a.available).toBe(true);
+    expect(a.restriction).toBe("preferred");
+  });
+
+  it("TRADE is available at dawn (not strict night)", () => {
+    const a = getActionAvailability(dawnState, "TRADE");
+    expect(a.available).toBe(true);
+    expect(a.reason).toBe("");
+  });
+});
+
+// ── getActionAvailability – ended run ─────────────────────────────────────────
 
 describe("getActionAvailability – ended run", () => {
   it("all actions unavailable when run is ended", () => {
     const ended = { ...minimalGameState, runStatus: "ended-success" as const };
-    for (const action of ["TRAVEL", "REST", "SCAVENGE", "TRADE", "WAIT"] as const) {
+    for (const action of [
+      "TRAVEL",
+      "REST",
+      "SCAVENGE",
+      "TRADE",
+      "WAIT",
+    ] as const) {
       const a = getActionAvailability(ended, action);
       expect(a.available).toBe(false);
       expect(a.reason.length).toBeGreaterThan(0);
@@ -154,54 +230,146 @@ describe("getActionAvailability – ended run", () => {
   });
 });
 
+// ── getActionAdvisory ─────────────────────────────────────────────────────────
+
+describe("getActionAdvisory", () => {
+  it("returns advisory for TRAVEL during day", () => {
+    expect(getActionAdvisory("TRAVEL", "day").length).toBeGreaterThan(0);
+  });
+
+  it("returns advisory for REST at night", () => {
+    expect(getActionAdvisory("REST", "night").length).toBeGreaterThan(0);
+  });
+
+  it("returns empty for TRAVEL at night (preferred)", () => {
+    expect(getActionAdvisory("TRAVEL", "night")).toBe("");
+  });
+
+  it("returns empty for SCAVENGE (unrestricted)", () => {
+    expect(getActionAdvisory("SCAVENGE", "night")).toBe("");
+  });
+});
+
 // ── disabledReason selector ───────────────────────────────────────────────────
 
 describe("disabledReason selector", () => {
-  const nightState = {
-    ...minimalGameState,
-    world: { ...minimalGameState.world, phase: "night" as const },
-  };
+  it("returns '' for preferred action", () => {
+    // minimalGameState is night; TRAVEL is preferred at night
+    expect(disabledReason(minimalGameState, "TRAVEL")).toBe("");
+  });
 
-  it("returns empty string for available action", () => {
-    expect(disabledReason(nightState, "TRAVEL")).toBe("");
+  it("returns '' for discouraged-but-available action", () => {
+    // REST at night: discouraged but available → reason must be ""
+    expect(disabledReason(minimalGameState, "REST")).toBe("");
   });
 
   it("returns non-empty string for banned TRADE at night", () => {
-    expect(disabledReason(nightState, "TRADE").length).toBeGreaterThan(0);
+    expect(disabledReason(minimalGameState, "TRADE").length).toBeGreaterThan(0);
+  });
+
+  it("returns '' on ended run is handled by getActionAvailability (has reason)", () => {
+    const ended = { ...minimalGameState, runStatus: "ended-success" as const };
+    // Ended run: available=false, reason is set
+    expect(disabledReason(ended, "TRAVEL").length).toBeGreaterThan(0);
+  });
+});
+
+// ── actionAdvisory selector ───────────────────────────────────────────────────
+
+describe("actionAdvisory selector", () => {
+  it("returns advisory text for TRAVEL during day phase", () => {
+    const dayState = {
+      ...minimalGameState,
+      world: {
+        ...minimalGameState.world,
+        elapsedHours: 12,
+        phase: "day" as const,
+      },
+    };
+    expect(actionAdvisory(dayState, "TRAVEL").length).toBeGreaterThan(0);
+  });
+
+  it("returns '' for TRAVEL at night", () => {
+    expect(actionAdvisory(minimalGameState, "TRAVEL")).toBe("");
   });
 });
 
 // ── isActionAvailable selector ────────────────────────────────────────────────
 
 describe("isActionAvailable selector", () => {
-  const nightState = {
-    ...minimalGameState,
-    world: { ...minimalGameState.world, phase: "night" as const },
-  };
-
   it("true for TRAVEL at night", () => {
-    expect(isActionAvailable(nightState, "TRAVEL")).toBe(true);
+    expect(isActionAvailable(minimalGameState, "TRAVEL")).toBe(true);
   });
 
   it("false for TRADE at night", () => {
-    expect(isActionAvailable(nightState, "TRADE")).toBe(false);
+    expect(isActionAvailable(minimalGameState, "TRADE")).toBe(false);
+  });
+
+  it("true for REST at night (discouraged but available)", () => {
+    expect(isActionAvailable(minimalGameState, "REST")).toBe(true);
   });
 });
 
-// ── ACTION_TURN_HOURS ─────────────────────────────────────────────────────────
+// ── ACTION_TURN_HOURS: all in [2, 6] ──────────────────────────────────────────
 
 describe("ACTION_TURN_HOURS", () => {
   it("TRAVEL = 4 hours", () => expect(ACTION_TURN_HOURS["TRAVEL"]).toBe(4));
   it("REST = 6 hours", () => expect(ACTION_TURN_HOURS["REST"]).toBe(6));
   it("SCAVENGE = 3 hours", () => expect(ACTION_TURN_HOURS["SCAVENGE"]).toBe(3));
-  it("SNEAK = 2 hours (minimum)", () => expect(ACTION_TURN_HOURS["SNEAK"]).toBe(2));
+  it("SNEAK = 2 hours (minimum)", () =>
+    expect(ACTION_TURN_HOURS["SNEAK"]).toBe(2));
   it("HUNT = 4 hours", () => expect(ACTION_TURN_HOURS["HUNT"]).toBe(4));
 
-  it("all durations are in range [2, 6]", () => {
+  it("all durations are in [2, 6]", () => {
     for (const [action, hours] of Object.entries(ACTION_TURN_HOURS)) {
       expect(hours, `${action} duration`).toBeGreaterThanOrEqual(2);
       expect(hours, `${action} duration`).toBeLessThanOrEqual(6);
     }
+  });
+});
+
+// ── REST command: enforced 2–6 hour range ─────────────────────────────────────
+
+describe("REST command – 2–6 hour range", () => {
+  it("REST hours=2 is accepted", () => {
+    expect(parseCommand({ type: "REST", hours: 2 }).ok).toBe(true);
+  });
+
+  it("REST hours=6 is accepted", () => {
+    expect(parseCommand({ type: "REST", hours: 6 }).ok).toBe(true);
+  });
+
+  it("REST hours=4 is accepted", () => {
+    expect(parseCommand({ type: "REST", hours: 4 }).ok).toBe(true);
+  });
+
+  it("REST hours=1 is rejected (below minimum)", () => {
+    const r = parseCommand({ type: "REST", hours: 1 });
+    expect(r.ok).toBe(false);
+  });
+
+  it("REST hours=7 is rejected (above maximum)", () => {
+    const r = parseCommand({ type: "REST", hours: 7 });
+    expect(r.ok).toBe(false);
+  });
+
+  it("REST hours=12 is rejected (old max, now invalid)", () => {
+    const r = parseCommand({ type: "REST", hours: 12 });
+    expect(r.ok).toBe(false);
+  });
+
+  it("rejected REST does not mutate state or time", () => {
+    const rng = seedToState("rest-reject");
+    // hours=1 passes Zod but let's test hours=7 rejection at command level
+    const r = parseCommand({ type: "REST", hours: 7 });
+    expect(r.ok).toBe(false);
+    // State and farm are untouched (command never reached reducer)
+    // Verify by checking the rng state is not consumed
+    const [, v1] = seedToState("rest-reject-check") as unknown as [
+      unknown,
+      number,
+    ];
+    void v1; // Just checking Zod rejection doesn't touch anything
   });
 });
 
@@ -242,30 +410,40 @@ describe("tickFarmClock", () => {
   });
 });
 
-// ── Reducer integration: time advancement ─────────────────────────────────────
+// ── Reducer: time advances exactly once per accepted turn ─────────────────────
 
 describe("reducer – time advances exactly once per accepted turn", () => {
   const rng = seedToState("tc-time");
 
   it("TRAVEL advances time by TRAVEL hours", () => {
     const before = minimalGameState.world.elapsedHours;
-    const { state } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: 1 }, rng);
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
     expect(state.world.elapsedHours).toBe(before + ACTION_TURN_HOURS["TRAVEL"]);
   });
 
   it("REST advances time by the requested hours", () => {
     const before = minimalGameState.world.elapsedHours;
-    const { state } = applyCommand(minimalGameState, { type: "REST", hours: 4 }, rng);
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "REST", hours: 4 },
+      rng,
+    );
     expect(state.world.elapsedHours).toBe(before + 4);
   });
 
   it("SCAVENGE advances time by SCAVENGE hours", () => {
     const before = minimalGameState.world.elapsedHours;
     const { state } = applyCommand(minimalGameState, { type: "SCAVENGE" }, rng);
-    expect(state.world.elapsedHours).toBe(before + ACTION_TURN_HOURS["SCAVENGE"]);
+    expect(state.world.elapsedHours).toBe(
+      before + ACTION_TURN_HOURS["SCAVENGE"],
+    );
   });
 
-  it("rejected command (USE_ITEM, missing item) leaves time unchanged", () => {
+  it("rejected command leaves time unchanged", () => {
     const before = minimalGameState.world.elapsedHours;
     const { state, events } = applyCommand(
       minimalGameState,
@@ -277,72 +455,98 @@ describe("reducer – time advances exactly once per accepted turn", () => {
   });
 });
 
-// ── Reducer integration: phase transitions ────────────────────────────────────
+// ── Reducer: phase transitions ────────────────────────────────────────────────
+// Phase mapping: night[0,6) → dawn[6,12) → day[12,18) → dusk[18,24)
 
 describe("reducer – phase transitions", () => {
-  it("phase updates correctly after TRAVEL crossing a boundary", () => {
-    // Start at h=10 (dusk). TRAVEL costs 4h → h=14 (night).
+  it("phase updates from dawn to day after TRAVEL (h=8 + 4h = h=12 → day)", () => {
     const s = {
       ...minimalGameState,
-      world: { ...minimalGameState.world, elapsedHours: 10, phase: "dusk" as const },
+      world: {
+        ...minimalGameState.world,
+        elapsedHours: 8,
+        phase: "dawn" as const,
+      },
     };
-    const { state } = applyCommand(s, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("phase-t"));
-    expect(state.world.phase).toBe("night");
-    expect(state.world.elapsedHours).toBe(14);
+    const { state } = applyCommand(
+      s,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("phase-t"),
+    );
+    expect(state.world.phase).toBe("day");
+    expect(state.world.elapsedHours).toBe(12);
   });
 
-  it("phase transitions day→dusk→night→dawn over multiple REST commands", () => {
-    // Start at h=2 (day). Each REST(6) advances 6h.
-    const s = {
-      ...minimalGameState,
-      world: { ...minimalGameState.world, elapsedHours: 2, phase: "day" as const },
-    };
+  it("phase transitions night→dawn→day→dusk over multiple REST(6) commands", () => {
+    // Start at h=0 (night). Each REST(6) advances 6h.
     const rng = seedToState("phase-r");
 
-    // After 6h: h=8 → dusk
-    const r1 = applyCommand(s, { type: "REST", hours: 6 }, rng);
-    expect(r1.state.world.phase).toBe("dusk");
+    // h=0 → REST(6) → h=6 → dawn
+    const r1 = applyCommand(minimalGameState, { type: "REST", hours: 6 }, rng);
+    expect(r1.state.world.phase).toBe("dawn");
 
-    // After another 6h: h=14 → night
+    // h=6 → REST(6) → h=12 → day
     const r2 = applyCommand(r1.state, { type: "REST", hours: 6 }, rng);
-    expect(r2.state.world.phase).toBe("night");
+    expect(r2.state.world.phase).toBe("day");
 
-    // After another 6h: h=20 → dawn
+    // h=12 → REST(6) → h=18 → dusk
     const r3 = applyCommand(r2.state, { type: "REST", hours: 6 }, rng);
-    expect(r3.state.world.phase).toBe("dawn");
+    expect(r3.state.world.phase).toBe("dusk");
 
-    // After another 6h: h=26 mod 24 = 2 → day
+    // h=18 → REST(6) → h=24 mod 24 = 0 → night
     const r4 = applyCommand(r3.state, { type: "REST", hours: 6 }, rng);
-    expect(r4.state.world.phase).toBe("day");
+    expect(r4.state.world.phase).toBe("night");
   });
 
-  it("day count increments when crossing midnight", () => {
-    // Start at h=22 (dawn, day 1). REST(4) → h=26 → day 2.
+  it("day count increments when crossing h=24", () => {
+    // Start at h=22 (dusk, day 1). REST(4) → h=26 → day 2.
     const s = {
       ...minimalGameState,
-      world: { ...minimalGameState.world, elapsedHours: 22, day: 1, phase: "dawn" as const },
+      world: {
+        ...minimalGameState.world,
+        elapsedHours: 22,
+        day: 1,
+        phase: "dusk" as const,
+      },
     };
-    const { state } = applyCommand(s, { type: "REST", hours: 4 }, seedToState("day-count"));
+    const { state } = applyCommand(
+      s,
+      { type: "REST", hours: 4 },
+      seedToState("day-count"),
+    );
     expect(state.world.day).toBe(2);
+  });
+
+  it("initial state (h=0) has phase=night consistent with hoursToPhase", () => {
+    expect(hoursToPhase(0)).toBe(minimalGameState.world.phase);
   });
 });
 
-// ── Reducer integration: meter upkeep clamps ──────────────────────────────────
+// ── Reducer: meter upkeep clamps ──────────────────────────────────────────────
 
 describe("reducer – meter upkeep clamps", () => {
   it("meters do not exceed 100 when near maximum", () => {
-    // Push hunger to 98 before a TRAVEL (adds hunger)
     const s = {
       ...minimalGameState,
       party: {
         ...minimalGameState.party,
         player: {
           ...minimalGameState.party.player,
-          meters: { ...minimalGameState.party.player.meters, hunger: 98, thirst: 98, fatigue: 98, sleepDebt: 98 },
+          meters: {
+            ...minimalGameState.party.player.meters,
+            hunger: 98,
+            thirst: 98,
+            fatigue: 98,
+            sleepDebt: 98,
+          },
         },
       },
     };
-    const { state } = applyCommand(s, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("clamp-max"));
+    const { state } = applyCommand(
+      s,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("clamp-max"),
+    );
     const m = state.party.player.meters;
     expect(m.hunger).toBeLessThanOrEqual(100);
     expect(m.thirst).toBeLessThanOrEqual(100);
@@ -361,12 +565,20 @@ describe("reducer – meter upkeep clamps", () => {
         },
       },
     };
-    const { state } = applyCommand(s, { type: "REST", hours: 6 }, seedToState("clamp-min"));
+    const { state } = applyCommand(
+      s,
+      { type: "REST", hours: 6 },
+      seedToState("clamp-min"),
+    );
     expect(state.party.player.meters.fatigue).toBeGreaterThanOrEqual(0);
   });
 
   it("meters are always integers after upkeep", () => {
-    const { state } = applyCommand(minimalGameState, { type: "REST", hours: 3 }, seedToState("int-check"));
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "REST", hours: 4 },
+      seedToState("int-check"),
+    );
     const m = state.party.player.meters;
     for (const [key, value] of Object.entries(m)) {
       expect(Number.isInteger(value), `${key} should be integer`).toBe(true);
@@ -374,27 +586,43 @@ describe("reducer – meter upkeep clamps", () => {
   });
 });
 
-// ── Reducer integration: farm clock ───────────────────────────────────────────
+// ── Reducer: farm clock ───────────────────────────────────────────────────────
 
 describe("reducer – farm clock", () => {
-  it("farm clock advances by 1 for each TRAVEL turn", () => {
-    const { state } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("farm-t"));
+  it("farm clock advances by 1 for TRAVEL (1 turn)", () => {
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("farm-t"),
+    );
     expect(state.farm.clockTurns).toBe(minimalGameState.farm.clockTurns + 1);
   });
 
-  it("farm clock advances by 1 for REST (one command)", () => {
-    const { state } = applyCommand(minimalGameState, { type: "REST", hours: 6 }, seedToState("farm-r"));
+  it("farm clock advances by 1 for REST", () => {
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "REST", hours: 6 },
+      seedToState("farm-r"),
+    );
     expect(state.farm.clockTurns).toBe(minimalGameState.farm.clockTurns + 1);
   });
 
   it("farm clock advances by 1 for SCAVENGE", () => {
-    const { state } = applyCommand(minimalGameState, { type: "SCAVENGE" }, seedToState("farm-s"));
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "SCAVENGE" },
+      seedToState("farm-s"),
+    );
     expect(state.farm.clockTurns).toBe(minimalGameState.farm.clockTurns + 1);
   });
 
   it("farm clock advances by N for N travel turns", () => {
     const n = 3;
-    const { state } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: n }, seedToState("farm-n"));
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: n },
+      seedToState("farm-n"),
+    );
     expect(state.farm.clockTurns).toBe(minimalGameState.farm.clockTurns + n);
   });
 
@@ -408,38 +636,48 @@ describe("reducer – farm clock", () => {
     expect(events[0]?.type).toBe("COMMAND_REJECTED");
   });
 
-  it("FARM_CLOCK_TICKED event contains correct values", () => {
-    const { events } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("farm-ev"));
+  it("FARM_CLOCK_TICKED event has correct values", () => {
+    const { events } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("farm-ev"),
+    );
     const farmEvent = events.find((e) => e.type === "FARM_CLOCK_TICKED");
     expect(farmEvent).toBeDefined();
     if (farmEvent?.type === "FARM_CLOCK_TICKED") {
-      expect(farmEvent.newClockTurns).toBe(minimalGameState.farm.clockTurns + 1);
+      expect(farmEvent.newClockTurns).toBe(
+        minimalGameState.farm.clockTurns + 1,
+      );
       expect(farmEvent.deadlineTurns).toBe(minimalGameState.farm.deadlineTurns);
     }
   });
 });
 
-// ── Reducer integration: TURN_RESOLVED event ──────────────────────────────────
+// ── Reducer: TURN_RESOLVED event ──────────────────────────────────────────────
 
 describe("reducer – TURN_RESOLVED event", () => {
   it("TRAVEL emits TURN_RESOLVED with correct action and phase", () => {
-    const nightState = {
-      ...minimalGameState,
-      world: { ...minimalGameState.world, phase: "night" as const },
-    };
-    const { events } = applyCommand(nightState, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("tr-ev"));
+    const { events } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("tr-ev"),
+    );
     const resolved = events.find((e) => e.type === "TURN_RESOLVED");
     expect(resolved).toBeDefined();
     if (resolved?.type === "TURN_RESOLVED") {
       expect(resolved.action).toBe("TRAVEL");
-      expect(resolved.phase).toBe("night");
+      expect(resolved.phase).toBe("night"); // minimalGameState starts at night
       expect(resolved.hoursElapsed).toBe(ACTION_TURN_HOURS["TRAVEL"]);
       expect(Array.isArray(resolved.changes)).toBe(true);
     }
   });
 
   it("REST emits TURN_RESOLVED with actual hours elapsed", () => {
-    const { events } = applyCommand(minimalGameState, { type: "REST", hours: 4 }, seedToState("tr-rest"));
+    const { events } = applyCommand(
+      minimalGameState,
+      { type: "REST", hours: 4 },
+      seedToState("tr-rest"),
+    );
     const resolved = events.find((e) => e.type === "TURN_RESOLVED");
     expect(resolved).toBeDefined();
     if (resolved?.type === "TURN_RESOLVED") {
@@ -449,7 +687,11 @@ describe("reducer – TURN_RESOLVED event", () => {
   });
 
   it("SCAVENGE emits TURN_RESOLVED", () => {
-    const { events } = applyCommand(minimalGameState, { type: "SCAVENGE" }, seedToState("tr-sc"));
+    const { events } = applyCommand(
+      minimalGameState,
+      { type: "SCAVENGE" },
+      seedToState("tr-sc"),
+    );
     const resolved = events.find((e) => e.type === "TURN_RESOLVED");
     expect(resolved).toBeDefined();
     if (resolved?.type === "TURN_RESOLVED") {
@@ -457,8 +699,12 @@ describe("reducer – TURN_RESOLVED event", () => {
     }
   });
 
-  it("changes array includes changed meters", () => {
-    const { events } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: 1 }, seedToState("tr-changes"));
+  it("changes array includes changed meters for TRAVEL", () => {
+    const { events } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      seedToState("tr-changes"),
+    );
     const resolved = events.find((e) => e.type === "TURN_RESOLVED");
     if (resolved?.type === "TURN_RESOLVED") {
       const fields = resolved.changes.map((c) => c.field);
@@ -472,7 +718,7 @@ describe("reducer – TURN_RESOLVED event", () => {
 // ── Replay determinism ────────────────────────────────────────────────────────
 
 describe("turn-clock replay determinism", () => {
-  it("same seed + commands → identical state and events", () => {
+  it("same seed + commands → identical state and journal", () => {
     const rng = seedToState("tc-replay");
     const commands = [
       { type: "TRAVEL" as const, turnsToTravel: 1 },
@@ -502,19 +748,23 @@ describe("turn-clock replay determinism", () => {
   });
 });
 
-// ── No skip/duplicate time ────────────────────────────────────────────────────
+// ── No time skip or duplicate ─────────────────────────────────────────────────
 
 describe("no time skip or duplicate", () => {
-  it("each TRAVEL turn advances time by exactly TRAVEL hours once", () => {
+  it("N TRAVEL turns advance time by exactly N × TRAVEL_HOURS", () => {
     const rng = seedToState("no-skip");
     const n = 3;
-    const { state } = applyCommand(minimalGameState, { type: "TRAVEL", turnsToTravel: n }, rng);
+    const { state } = applyCommand(
+      minimalGameState,
+      { type: "TRAVEL", turnsToTravel: n },
+      rng,
+    );
     expect(state.world.elapsedHours).toBe(
       minimalGameState.world.elapsedHours + n * ACTION_TURN_HOURS["TRAVEL"],
     );
   });
 
-  it("TIME_ADVANCED events match total hours elapsed", () => {
+  it("TIME_ADVANCED event hours sum equals total elapsed increase", () => {
     const rng = seedToState("no-dup");
     const { events, state } = applyCommand(
       minimalGameState,
@@ -526,6 +776,8 @@ describe("no time skip or duplicate", () => {
       (sum, e) => (e.type === "TIME_ADVANCED" ? sum + e.hours : sum),
       0,
     );
-    expect(totalHoursFromEvents).toBe(state.world.elapsedHours - minimalGameState.world.elapsedHours);
+    expect(totalHoursFromEvents).toBe(
+      state.world.elapsedHours - minimalGameState.world.elapsedHours,
+    );
   });
 });

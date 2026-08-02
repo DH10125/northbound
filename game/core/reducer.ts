@@ -278,25 +278,58 @@ function applyRest(
   // Scale upkeep linearly to the actual hours passed
   const scale = hours / upkeep.hours;
   const m = player.meters;
-  const newFatigue = clamp(m.fatigue + Math.round(upkeep.fatigue * scale), 0, 100);
+  const newFatigue = clamp(
+    m.fatigue + Math.round(upkeep.fatigue * scale),
+    0,
+    100,
+  );
   const newHunger = clamp(m.hunger + Math.round(upkeep.hunger * scale), 0, 100);
   const newThirst = clamp(m.thirst + Math.round(upkeep.thirst * scale), 0, 100);
-  const newSleepDebt = clamp(m.sleepDebt + Math.round(upkeep.sleepDebt * scale), 0, 100);
+  const newSleepDebt = clamp(
+    m.sleepDebt + Math.round(upkeep.sleepDebt * scale),
+    0,
+    100,
+  );
 
   // Farm clock ticks once per accepted REST command (not per hour)
   const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
 
   const changes: ResolutionChange[] = [];
   if (newFatigue !== m.fatigue)
-    changes.push({ field: "fatigue", before: m.fatigue, after: newFatigue, delta: newFatigue - m.fatigue });
+    changes.push({
+      field: "fatigue",
+      before: m.fatigue,
+      after: newFatigue,
+      delta: newFatigue - m.fatigue,
+    });
   if (newHunger !== m.hunger)
-    changes.push({ field: "hunger", before: m.hunger, after: newHunger, delta: newHunger - m.hunger });
+    changes.push({
+      field: "hunger",
+      before: m.hunger,
+      after: newHunger,
+      delta: newHunger - m.hunger,
+    });
   if (newThirst !== m.thirst)
-    changes.push({ field: "thirst", before: m.thirst, after: newThirst, delta: newThirst - m.thirst });
+    changes.push({
+      field: "thirst",
+      before: m.thirst,
+      after: newThirst,
+      delta: newThirst - m.thirst,
+    });
   if (newSleepDebt !== m.sleepDebt)
-    changes.push({ field: "sleepDebt", before: m.sleepDebt, after: newSleepDebt, delta: newSleepDebt - m.sleepDebt });
+    changes.push({
+      field: "sleepDebt",
+      before: m.sleepDebt,
+      after: newSleepDebt,
+      delta: newSleepDebt - m.sleepDebt,
+    });
   if (newFarmClockTurns !== state.farm.clockTurns)
-    changes.push({ field: "farm.clockTurns", before: state.farm.clockTurns, after: newFarmClockTurns, delta: 1 });
+    changes.push({
+      field: "farm.clockTurns",
+      before: state.farm.clockTurns,
+      after: newFarmClockTurns,
+      delta: 1,
+    });
 
   events.push({
     type: "TIME_ADVANCED",

@@ -6,7 +6,7 @@
  */
 
 import type { GameState } from "../schemas/game-state";
-import { getActionAvailability } from "./turn-clock";
+import { getActionAvailability, getActionAdvisory } from "./turn-clock";
 import type { ActionType, ActionAvailability } from "./turn-clock";
 
 // ── Party ─────────────────────────────────────────────────────────────────────
@@ -125,16 +125,29 @@ export function actionAvailability(
  * Return true if the given action can be taken right now.
  * Shorthand for `actionAvailability(state, action).available`.
  */
-export function isActionAvailable(state: GameState, action: ActionType): boolean {
+export function isActionAvailable(
+  state: GameState,
+  action: ActionType,
+): boolean {
   return getActionAvailability(state, action).available;
 }
 
 /**
  * If the action is unavailable, return the human-readable reason; otherwise "".
  * Suitable for aria-describedby on a disabled button.
+ * Always returns "" for discouraged-but-available actions.
  */
 export function disabledReason(state: GameState, action: ActionType): string {
   return getActionAvailability(state, action).reason;
+}
+
+/**
+ * Return an advisory hint for a discouraged-but-available action.
+ * Returns "" when the action is preferred or unrestricted.
+ * Use for tooltips, not aria-describedby (the action is still available).
+ */
+export function actionAdvisory(state: GameState, action: ActionType): string {
+  return getActionAdvisory(action, state.world.phase);
 }
 
 /** Re-export ActionType so consumers can import from selectors. */

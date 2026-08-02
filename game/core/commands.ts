@@ -25,12 +25,13 @@ export const TravelCommandSchema = z
   .strict();
 
 /**
- * Rest in place for a number of hours (1–12).
+ * Rest in place for a number of hours (2–6).
+ * Matches the canonical turn-clock contract: every turn is 2–6 hours.
  */
 export const RestCommandSchema = z
   .object({
     type: z.literal("REST"),
-    hours: z.number().int().min(1).max(12),
+    hours: z.number().int().min(2).max(6),
   })
   .strict();
 

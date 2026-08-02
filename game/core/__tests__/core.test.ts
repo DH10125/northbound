@@ -340,7 +340,7 @@ describe("parseCommand", () => {
   });
 
   it("parses valid REST command", () => {
-    const r = parseCommand({ type: "REST", hours: 8 });
+    const r = parseCommand({ type: "REST", hours: 4 });
     expect(r.ok).toBe(true);
   });
 
