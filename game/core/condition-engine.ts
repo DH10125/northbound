@@ -153,9 +153,7 @@ export function tickConditions(
         newStageIndex === 3 &&
         cond.stageIndex < 3 &&
         def.permanentModifier &&
-        !nextModifiers.some(
-          (m) => m.sourceConditionId === cond.conditionId,
-        )
+        !nextModifiers.some((m) => m.sourceConditionId === cond.conditionId)
       ) {
         nextModifiers.push({
           sourceConditionId: cond.conditionId,
@@ -217,7 +215,11 @@ export function applyTreatment(
     };
   }
 
-  const updated: ActiveCondition = { ...cond, treated: true, treatmentTurns: 0 };
+  const updated: ActiveCondition = {
+    ...cond,
+    treated: true,
+    treatmentTurns: 0,
+  };
   return {
     ok: true,
     condition: updated,

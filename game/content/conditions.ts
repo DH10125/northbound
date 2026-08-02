@@ -107,8 +107,7 @@ const RAW_CONDITIONS = [
         turnsToProgress: 3,
         treatmentTurnsRequired: 5,
         severeRisk: true,
-        severeRiskWarning:
-          "Without water soon, permanent damage seems likely.",
+        severeRiskWarning: "Without water soon, permanent damage seems likely.",
       },
       critical: {
         symptomsBasic: ["Unconsciousness", "Organ failure signs"],
@@ -251,7 +250,10 @@ const RAW_CONDITIONS = [
     stages: {
       mild: {
         symptomsBasic: ["Redness around wound", "Warmth", "Mild swelling"],
-        symptomsDetailed: ["Purulent drainage beginning", "Local lymph response"],
+        symptomsDetailed: [
+          "Purulent drainage beginning",
+          "Local lymph response",
+        ],
         medicalSkillThreshold: 2,
         perTurnEffects: { pain: 2, infection: 3 },
         turnsToProgress: 6,
@@ -371,7 +373,11 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       moderate: {
-        symptomsBasic: ["Persistent cough", "Shortness of breath", "Chest pain"],
+        symptomsBasic: [
+          "Persistent cough",
+          "Shortness of breath",
+          "Chest pain",
+        ],
         symptomsDetailed: ["Wheezing", "Decreased oxygen indicators"],
         medicalSkillThreshold: 4,
         perTurnEffects: { fatigue: 5, health: -2, pain: 3, toxicExposure: 4 },
@@ -417,9 +423,8 @@ const RAW_CONDITIONS = [
 ] as const;
 
 // Validate all definitions at module load time.
-export const CONDITIONS: ReadonlyArray<ConditionDefinition> = RAW_CONDITIONS.map(
-  (raw) => ConditionDefinitionSchema.parse(raw),
-);
+export const CONDITIONS: ReadonlyArray<ConditionDefinition> =
+  RAW_CONDITIONS.map((raw) => ConditionDefinitionSchema.parse(raw));
 
 /** Look up a condition definition by ID. */
 export function getConditionDefinition(

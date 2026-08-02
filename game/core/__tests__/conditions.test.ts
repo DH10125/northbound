@@ -14,10 +14,7 @@ import type { RngState } from "../rng";
 import { minimalGameState } from "../../testing/fixtures";
 import type { GameState } from "../../schemas/game-state";
 import type { ActiveCondition } from "../../schemas/conditions";
-import {
-  tickConditions,
-  getSymptomVisibility,
-} from "../condition-engine";
+import { tickConditions, getSymptomVisibility } from "../condition-engine";
 import {
   CONDITIONS,
   getConditionDefinition,
@@ -451,7 +448,11 @@ describe("Symptom visibility by medical skill", () => {
 describe("Conditions integrated with turn resolution", () => {
   it("condition meter effects applied during TRAVEL", () => {
     const state = stateWithCondition("condition.dehydration", 0);
-    const result = applyCommand(state, { type: "TRAVEL", turnsToTravel: 1 }, rng);
+    const result = applyCommand(
+      state,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
 
     // Dehydration mild: +2 fatigue, +3 thirst per turn (on top of upkeep)
     const player = result.state.party.player;

@@ -69,7 +69,12 @@ const TRAVEL_VARIANCE = 10; // +/- 0..9
 function applyTurnUpkeep(
   state: GameState,
   action: "TRAVEL" | "REST" | "SCAVENGE" | "WAIT",
-): { state: GameState; changes: ResolutionChange[]; farmEvent: DomainEvent; conditionEvents: DomainEvent[] } {
+): {
+  state: GameState;
+  changes: ResolutionChange[];
+  farmEvent: DomainEvent;
+  conditionEvents: DomainEvent[];
+} {
   const upkeep = computeUpkeep(action);
   const player = state.party.player;
   const m = player.meters;
@@ -166,7 +171,12 @@ function applyTurnUpkeep(
     deadlineTurns: state.farm.deadlineTurns,
   };
 
-  return { state: nextState, changes, farmEvent, conditionEvents: condTickResult.events };
+  return {
+    state: nextState,
+    changes,
+    farmEvent,
+    conditionEvents: condTickResult.events,
+  };
 }
 
 /** Build a TURN_RESOLVED event from a completed turn. */
