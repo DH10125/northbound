@@ -28,6 +28,7 @@ import type { ResolutionChange, TurnSummary } from "./turn-clock";
 import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
 import type { StorageLocation } from "./inventory-types";
 import type { ItemInstanceId } from "../schemas/ids";
+import { applyChooseRoute } from "./route-resolution";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -711,6 +712,10 @@ export function applyCommand(
   let result: ReducerResult;
 
   switch (command.type) {
+    case "CHOOSE_ROUTE":
+      result = applyChooseRoute(state, rng, command.edgeId);
+      break;
+
     case "TRAVEL":
       result = applyTravel(state, rng, command.turnsToTravel);
       break;

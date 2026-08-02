@@ -11,7 +11,19 @@
 
 import { z } from "zod";
 
+import { EdgeIdSchema } from "../schemas/ids";
+
 // ── Individual commands ───────────────────────────────────────────────────────
+
+/**
+ * Choose a route (edge) to travel along from the current node.
+ */
+export const ChooseRouteCommandSchema = z
+  .object({
+    type: z.literal("CHOOSE_ROUTE"),
+    edgeId: EdgeIdSchema,
+  })
+  .strict();
 
 /**
  * Advance the party along the route by one travel segment.
@@ -99,6 +111,7 @@ export const ConsumeItemCommandSchema = z
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const CommandSchema = z.discriminatedUnion("type", [
+  ChooseRouteCommandSchema,
   TravelCommandSchema,
   RestCommandSchema,
   ChooseEventOptionCommandSchema,
@@ -109,6 +122,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
+export type ChooseRouteCommand = z.infer<typeof ChooseRouteCommandSchema>;
 export type TravelCommand = z.infer<typeof TravelCommandSchema>;
 export type RestCommand = z.infer<typeof RestCommandSchema>;
 export type ChooseEventOptionCommand = z.infer<
