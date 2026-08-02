@@ -78,12 +78,12 @@ const RAW_CONDITIONS = [
     id: "condition.dehydration",
     name: "Dehydration",
     description:
-      "Insufficient water intake. Progresses rapidly in heat. Rest and clean water reverse it.",
+      "Your body is running low on water. Worsens fast in the heat. Clean water is the only fix.",
     category: "exposure",
     stages: {
       mild: {
         symptomsBasic: ["Dry mouth", "Mild headache"],
-        symptomsDetailed: ["Decreased skin turgor", "Concentrated urine"],
+        symptomsDetailed: ["Skin looks pinched", "Darker than usual output"],
         medicalSkillThreshold: 3,
         perTurnEffects: { fatigue: 2, thirst: 3 },
         turnsToProgress: 6,
@@ -92,7 +92,7 @@ const RAW_CONDITIONS = [
       },
       moderate: {
         symptomsBasic: ["Dizziness", "Rapid heartbeat"],
-        symptomsDetailed: ["Orthostatic changes", "Reduced output"],
+        symptomsDetailed: ["Stumbles when standing", "Body slowing down"],
         medicalSkillThreshold: 4,
         perTurnEffects: { fatigue: 4, health: -2, thirst: 5 },
         turnsToProgress: 4,
@@ -101,7 +101,7 @@ const RAW_CONDITIONS = [
       },
       severe: {
         symptomsBasic: ["Confusion", "Weakness", "Dark urine"],
-        symptomsDetailed: ["Tachycardia", "Hypotension signs"],
+        symptomsDetailed: ["Heart racing", "Looks faint and unsteady"],
         medicalSkillThreshold: 5,
         perTurnEffects: { fatigue: 6, health: -5, pain: 3 },
         turnsToProgress: 3,
@@ -110,8 +110,8 @@ const RAW_CONDITIONS = [
         severeRiskWarning: "Without water soon, permanent damage seems likely.",
       },
       critical: {
-        symptomsBasic: ["Unconsciousness", "Organ failure signs"],
-        symptomsDetailed: ["Multi-system failure indicators"],
+        symptomsBasic: ["Unconscious", "Body shutting down"],
+        symptomsDetailed: ["Multiple systems failing"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -10, pain: 5 },
         turnsToProgress: 0,
@@ -126,7 +126,7 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "endurance",
       delta: -1,
-      label: "Kidney strain (past dehydration crisis)",
+      label: "Worn out (past dehydration crisis)",
     },
   },
   {
@@ -138,7 +138,7 @@ const RAW_CONDITIONS = [
     stages: {
       mild: {
         symptomsBasic: ["Heavy sweating", "Muscle cramps"],
-        symptomsDetailed: ["Elevated core temperature", "Salt depletion signs"],
+        symptomsDetailed: ["Running hot", "Salt-starved muscles"],
         medicalSkillThreshold: 3,
         perTurnEffects: { fatigue: 3, thirst: 4 },
         turnsToProgress: 5,
@@ -147,7 +147,7 @@ const RAW_CONDITIONS = [
       },
       moderate: {
         symptomsBasic: ["Nausea", "Intense headache", "Weakness"],
-        symptomsDetailed: ["Core temp rising", "Pale clammy skin"],
+        symptomsDetailed: ["Getting hotter", "Pale and clammy"],
         medicalSkillThreshold: 4,
         perTurnEffects: { fatigue: 5, health: -3, stress: 3 },
         turnsToProgress: 4,
@@ -156,18 +156,18 @@ const RAW_CONDITIONS = [
       },
       severe: {
         symptomsBasic: ["Stopped sweating", "Confusion", "Hot dry skin"],
-        symptomsDetailed: ["Dangerously elevated temperature"],
+        symptomsDetailed: ["Dangerously overheated"],
         medicalSkillThreshold: 5,
         perTurnEffects: { health: -7, pain: 4, fatigue: 5 },
         turnsToProgress: 2,
         treatmentTurnsRequired: 5,
         severeRisk: true,
         severeRiskWarning:
-          "Heatstroke is setting in. Permanent damage or death likely without cooling.",
+          "The heat is taking over. Permanent damage or death likely without cooling.",
       },
       critical: {
-        symptomsBasic: ["Seizures", "Loss of consciousness"],
-        symptomsDetailed: ["Organ damage indicators"],
+        symptomsBasic: ["Seizures", "Blacking out"],
+        symptomsDetailed: ["Body breaking down from heat"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -12, pain: 6 },
         turnsToProgress: 0,
@@ -182,19 +182,19 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "endurance",
       delta: -1,
-      label: "Heat sensitivity (past heatstroke)",
+      label: "Heat sensitivity (never fully recovered)",
     },
   },
   {
     id: "condition.dysentery",
-    name: "Dysentery",
+    name: "Gut Sickness",
     description:
-      "Severe intestinal infection from contaminated water or food. Causes rapid dehydration.",
+      "Something bad in the water or food. Drains fluids fast. Needs medicine and rest.",
     category: "illness",
     stages: {
       mild: {
-        symptomsBasic: ["Stomach cramps", "Frequent bowel movements"],
-        symptomsDetailed: ["Mild fever", "Mucus in stool"],
+        symptomsBasic: ["Stomach cramps", "Frequent trips to the bushes"],
+        symptomsDetailed: ["Low fever", "Looks rough around the edges"],
         medicalSkillThreshold: 3,
         perTurnEffects: { thirst: 4, hunger: 2, fatigue: 2 },
         turnsToProgress: 5,
@@ -202,8 +202,8 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       moderate: {
-        symptomsBasic: ["Bloody stool", "Fever", "Severe cramps"],
-        symptomsDetailed: ["Signs of dehydration", "Abdominal tenderness"],
+        symptomsBasic: ["Blood in stool", "Fever", "Bad cramps"],
+        symptomsDetailed: ["Drying out fast", "Belly tender to touch"],
         medicalSkillThreshold: 4,
         perTurnEffects: { health: -3, thirst: 6, fatigue: 4, pain: 3 },
         turnsToProgress: 4,
@@ -211,19 +211,19 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       severe: {
-        symptomsBasic: ["Constant pain", "Cannot keep fluids down", "Weakness"],
-        symptomsDetailed: ["Severe dehydration markers", "High fever"],
+        symptomsBasic: ["Constant pain", "Can't keep fluids down", "Weakness"],
+        symptomsDetailed: ["Severely dried out", "Burning up"],
         medicalSkillThreshold: 5,
         perTurnEffects: { health: -6, thirst: 8, pain: 5, fatigue: 5 },
         turnsToProgress: 3,
         treatmentTurnsRequired: 6,
         severeRisk: true,
         severeRiskWarning:
-          "Dehydration from dysentery may become fatal without antibiotics and fluids.",
+          "The sickness is draining them dry. Needs medicine and fluids now.",
       },
       critical: {
-        symptomsBasic: ["Shock symptoms", "Minimal consciousness"],
-        symptomsDetailed: ["Septic indicators", "Organ stress"],
+        symptomsBasic: ["Going into shock", "Barely conscious"],
+        symptomsDetailed: ["Poison spreading", "Body under extreme strain"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -10, pain: 6 },
         turnsToProgress: 0,
@@ -238,22 +238,19 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "endurance",
       delta: -1,
-      label: "Weakened gut (past severe dysentery)",
+      label: "Weakened gut (never fully healed)",
     },
   },
   {
     id: "condition.wound-infection",
     name: "Wound Infection",
     description:
-      "An untreated wound has become infected. Requires cleaning and antibiotics.",
+      "An untreated wound has gone bad. Needs cleaning and medicine before it spreads.",
     category: "injury",
     stages: {
       mild: {
         symptomsBasic: ["Redness around wound", "Warmth", "Mild swelling"],
-        symptomsDetailed: [
-          "Purulent drainage beginning",
-          "Local lymph response",
-        ],
+        symptomsDetailed: ["Oozing from the wound", "Glands swelling nearby"],
         medicalSkillThreshold: 2,
         perTurnEffects: { pain: 2, infection: 3 },
         turnsToProgress: 6,
@@ -262,7 +259,10 @@ const RAW_CONDITIONS = [
       },
       moderate: {
         symptomsBasic: ["Spreading redness", "Pus", "Fever"],
-        symptomsDetailed: ["Cellulitis pattern", "Lymphangitis streaks"],
+        symptomsDetailed: [
+          "Infection creeping outward",
+          "Red lines near wound",
+        ],
         medicalSkillThreshold: 4,
         perTurnEffects: { pain: 4, infection: 5, health: -2 },
         turnsToProgress: 4,
@@ -271,24 +271,28 @@ const RAW_CONDITIONS = [
       },
       severe: {
         symptomsBasic: ["High fever", "Wound smells foul", "Red streaks"],
-        symptomsDetailed: ["Systemic infection signs", "Tissue necrosis risk"],
+        symptomsDetailed: [
+          "Infection spreading through body",
+          "Flesh going dark",
+        ],
         medicalSkillThreshold: 5,
         perTurnEffects: { health: -6, pain: 5, infection: 7 },
         turnsToProgress: 3,
         treatmentTurnsRequired: 6,
         severeRisk: true,
         severeRiskWarning:
-          "This infection may become septic. Immediate treatment critical.",
+          "The infection is spreading fast. Needs treatment immediately.",
       },
       critical: {
-        symptomsBasic: ["Sepsis signs", "Delirium", "Rapid deterioration"],
-        symptomsDetailed: ["Multi-organ involvement"],
+        symptomsBasic: ["Delirious", "Rapid decline", "Burning up"],
+        symptomsDetailed: ["Poison throughout the body"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -12, pain: 7, infection: 10 },
         turnsToProgress: 0,
         treatmentTurnsRequired: 10,
         severeRisk: true,
-        severeRiskWarning: "Sepsis is likely fatal without intensive care.",
+        severeRiskWarning:
+          "Blood poisoning will be fatal without intensive care.",
       },
     },
     treatmentItemId: "item.medicine.antibiotics",
@@ -297,19 +301,19 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "strength",
       delta: -1,
-      label: "Tissue scarring (past severe infection)",
+      label: "Deep scarring (badly healed wound)",
     },
   },
   {
     id: "condition.fracture",
-    name: "Fracture",
+    name: "Broken Bone",
     description:
-      "A broken bone requiring immobilization. Travel worsens it significantly.",
+      "A bad break that needs to be set and splinted. Moving makes it worse.",
     category: "injury",
     stages: {
       mild: {
         symptomsBasic: ["Sharp pain on movement", "Swelling"],
-        symptomsDetailed: ["Possible hairline fracture", "Point tenderness"],
+        symptomsDetailed: ["Might be cracked", "Very tender to touch"],
         medicalSkillThreshold: 4,
         perTurnEffects: { pain: 4, fatigue: 2 },
         turnsToProgress: 8,
@@ -317,8 +321,8 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       moderate: {
-        symptomsBasic: ["Cannot bear weight", "Visible deformity", "Bruising"],
-        symptomsDetailed: ["Displaced fracture likely", "Crepitus"],
+        symptomsBasic: ["Can't bear weight", "Visible bend", "Deep bruising"],
+        symptomsDetailed: ["Bone shifted out of place", "Grinding sensation"],
         medicalSkillThreshold: 5,
         perTurnEffects: { pain: 6, fatigue: 3, health: -2 },
         turnsToProgress: 6,
@@ -326,25 +330,25 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       severe: {
-        symptomsBasic: ["Bone visible", "Extreme pain", "Cannot function"],
-        symptomsDetailed: ["Open fracture", "Vascular compromise risk"],
+        symptomsBasic: ["Bone showing", "Extreme pain", "Can't function"],
+        symptomsDetailed: ["Open break", "Limb turning pale below the injury"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -5, pain: 8, fatigue: 4 },
         turnsToProgress: 4,
         treatmentTurnsRequired: 8,
         severeRisk: true,
         severeRiskWarning:
-          "Open fracture risks infection and permanent disability.",
+          "The break is open and exposed. Risks going bad fast.",
       },
       critical: {
-        symptomsBasic: ["Limb non-functional", "Shock", "Pale and cold"],
-        symptomsDetailed: ["Compartment syndrome signs"],
+        symptomsBasic: ["Limb useless", "In shock", "Pale and cold"],
+        symptomsDetailed: ["Limb swelling dangerously tight"],
         medicalSkillThreshold: 7,
         perTurnEffects: { health: -8, pain: 10 },
         turnsToProgress: 0,
         treatmentTurnsRequired: 12,
         severeRisk: true,
-        severeRiskWarning: "Limb loss or death without surgery.",
+        severeRiskWarning: "May lose the limb — or worse — without help.",
       },
     },
     treatmentItemId: "item.medicine.bandage",
@@ -353,19 +357,19 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "agility",
       delta: -1,
-      label: "Impaired mobility (poorly healed fracture)",
+      label: "Stiff limb (badly healed break)",
     },
   },
   {
     id: "condition.smoke-exposure",
-    name: "Smoke Exposure",
+    name: "Smoke Lungs",
     description:
-      "Lung irritation from prolonged smoke inhalation. Rest in clean air needed.",
+      "Breathing too much smoke. Needs clean air and rest to clear up.",
     category: "exposure",
     stages: {
       mild: {
         symptomsBasic: ["Coughing", "Burning eyes", "Scratchy throat"],
-        symptomsDetailed: ["Bronchial irritation", "Mild hypoxia signs"],
+        symptomsDetailed: ["Airways irritated", "Slightly winded"],
         medicalSkillThreshold: 3,
         perTurnEffects: { fatigue: 3, pain: 1, toxicExposure: 2 },
         turnsToProgress: 6,
@@ -373,12 +377,8 @@ const RAW_CONDITIONS = [
         severeRisk: false,
       },
       moderate: {
-        symptomsBasic: [
-          "Persistent cough",
-          "Shortness of breath",
-          "Chest pain",
-        ],
-        symptomsDetailed: ["Wheezing", "Decreased oxygen indicators"],
+        symptomsBasic: ["Persistent cough", "Short of breath", "Chest hurts"],
+        symptomsDetailed: ["Wheezing on exhale", "Struggling for air"],
         medicalSkillThreshold: 4,
         perTurnEffects: { fatigue: 5, health: -2, pain: 3, toxicExposure: 4 },
         turnsToProgress: 4,
@@ -387,11 +387,11 @@ const RAW_CONDITIONS = [
       },
       severe: {
         symptomsBasic: [
-          "Cannot breathe deeply",
-          "Blue-tinged lips",
+          "Can't take a deep breath",
+          "Lips turning blue",
           "Constant cough",
         ],
-        symptomsDetailed: ["Severe bronchospasm", "Chemical pneumonitis risk"],
+        symptomsDetailed: ["Lungs seizing up", "Smoke damage setting in deep"],
         medicalSkillThreshold: 5,
         perTurnEffects: { health: -6, pain: 5, fatigue: 6, toxicExposure: 6 },
         turnsToProgress: 3,
@@ -401,8 +401,8 @@ const RAW_CONDITIONS = [
           "Lung damage may become permanent without clean air and rest.",
       },
       critical: {
-        symptomsBasic: ["Cannot breathe", "Loss of consciousness"],
-        symptomsDetailed: ["Respiratory failure"],
+        symptomsBasic: ["Can't breathe", "Blacking out"],
+        symptomsDetailed: ["Lungs failing"],
         medicalSkillThreshold: 6,
         perTurnEffects: { health: -10, pain: 6 },
         turnsToProgress: 0,
@@ -417,7 +417,7 @@ const RAW_CONDITIONS = [
     permanentModifier: {
       target: "endurance",
       delta: -1,
-      label: "Scarred lungs (past severe smoke exposure)",
+      label: "Scarred lungs (never fully cleared)",
     },
   },
 ] as const;

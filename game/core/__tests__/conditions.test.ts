@@ -21,6 +21,8 @@ import {
   ConditionDefinitionSchema,
 } from "../../content/conditions";
 import type { ItemInstanceId, ItemId } from "../../schemas/ids";
+import { replay, diffReplay } from "../replay";
+import { treatmentDisabledReason, hasActiveConditions } from "../selectors";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +202,7 @@ describe("Condition tick — untreated progression", () => {
       sourceConditionId: "condition.dehydration",
       target: "endurance",
       delta: -1,
-      label: "Kidney strain (past dehydration crisis)",
+      label: "Worn out (past dehydration crisis)",
     };
 
     const cond: ActiveCondition = {
@@ -425,7 +427,7 @@ describe("Symptom visibility by medical skill", () => {
   it("shows detailed symptoms with sufficient medical skill", () => {
     const vis = getSymptomVisibility(cond, 3);
     expect(vis).not.toBeNull();
-    expect(vis!.symptoms).toContain("Decreased skin turgor");
+    expect(vis!.symptoms).toContain("Skin looks pinched");
     expect(vis!.uncertaintyNote).toContain("uncertain");
   });
 
@@ -481,7 +483,7 @@ describe("Conditions integrated with turn resolution", () => {
               sourceConditionId: "condition.dehydration",
               target: "endurance",
               delta: -1,
-              label: "Kidney strain (past dehydration crisis)",
+              label: "Worn out (past dehydration crisis)",
             },
           ],
         },
@@ -514,5 +516,98 @@ describe("Malformed condition content", () => {
     };
     const result = ConditionDefinitionSchema.safeParse(bad);
     expect(result.success).toBe(false);
+  });
+});
+
+// ── Replay determinism ───────────────────────────────────────────────────────
+
+describe("Conditions persist through replay", () => {
+  it("replay produces identical condition state", () => {
+    const state = stateWithTreatmentItems("condition.dehydration");
+    const commands = [
+      {
+        type: "TREAT_CONDITION" as const,
+        conditionId: "condition.dehydration",
+      },
+      { type: "TRAVEL" as const, turnsToTravel: 1 },
+    ];
+    const a = replay(state, rng, commands);
+    const b = replay(state, rng, commands);
+    const diff = diffReplay(a, b);
+    expect(diff.diverged).toBe(false);
+  });
+
+  it("conditions survive round-trip through state", () => {
+    const state = stateWithCondition("condition.dehydration", 1);
+    const result = applyCommand(
+      state,
+      { type: "TRAVEL", turnsToTravel: 1 },
+      rng,
+    );
+    // Condition still present after travel
+    expect(result.state.party.player.conditions.length).toBeGreaterThanOrEqual(
+      1,
+    );
+    const cond = result.state.party.player.conditions[0]!;
+    expect(cond.conditionId).toBe("condition.dehydration");
+    expect(cond.totalTurns).toBeGreaterThan(0);
+  });
+});
+
+// ── Rejection preserves state + RNG ──────────────────────────────────────────
+
+describe("Rejection preserves state and RNG", () => {
+  it("unknown condition ID preserves state reference", () => {
+    const result = applyCommand(
+      minimalGameState,
+      { type: "TREAT_CONDITION", conditionId: "condition.nonexistent" },
+      rng,
+    );
+    expect(result.state).toBe(minimalGameState);
+    expect(result.rng).toEqual(rng);
+  });
+
+  it("inactive run preserves state reference", () => {
+    const endedState = {
+      ...minimalGameState,
+      runStatus: "ended-success" as const,
+    };
+    const result = applyCommand(
+      endedState,
+      { type: "TREAT_CONDITION", conditionId: "condition.dehydration" },
+      rng,
+    );
+    expect(result.state).toBe(endedState);
+    expect(result.rng).toEqual(rng);
+  });
+});
+
+// ── Selector tests ───────────────────────────────────────────────────────────
+
+describe("Condition selectors", () => {
+  it("treatmentDisabledReason returns empty for treatable condition", () => {
+    const state = stateWithTreatmentItems("condition.dehydration");
+    expect(treatmentDisabledReason(state, "condition.dehydration")).toBe("");
+  });
+
+  it("treatmentDisabledReason returns reason when no items", () => {
+    const state = stateWithCondition("condition.dehydration");
+    const reason = treatmentDisabledReason(state, "condition.dehydration");
+    expect(reason).toContain("Need");
+  });
+
+  it("treatmentDisabledReason returns reason for already treated", () => {
+    const state = stateWithCondition("condition.dehydration", 0, true);
+    const reason = treatmentDisabledReason(state, "condition.dehydration");
+    expect(reason).toContain("Already");
+  });
+
+  it("hasActiveConditions returns true with conditions", () => {
+    const state = stateWithCondition("condition.dehydration");
+    expect(hasActiveConditions(state)).toBe(true);
+  });
+
+  it("hasActiveConditions returns false without conditions", () => {
+    expect(hasActiveConditions(minimalGameState)).toBe(false);
   });
 });
