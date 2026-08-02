@@ -66,10 +66,7 @@ export function EventPanel({
       <p className="event-text">{event.text}</p>
 
       {!resolutionText && (
-        <fieldset
-          aria-label="Choose an action"
-          disabled={isResolving}
-        >
+        <fieldset aria-label="Choose an action" disabled={isResolving}>
           <legend className="sr-only">Available choices</legend>
           <ul role="list" className="event-options">
             {event.options.map((option) => {
@@ -127,7 +124,9 @@ export function EventPanel({
           <div className="event-resolution-content">
             {resolutionTier && (
               <p className="event-tier">
-                <span aria-label={`Check result: ${resolutionTier.replace("-", " ")}`}>
+                <span
+                  aria-label={`Check result: ${resolutionTier.replace("-", " ")}`}
+                >
                   {tierToSymbol(resolutionTier)} {tierToLabel(resolutionTier)}
                 </span>
               </p>

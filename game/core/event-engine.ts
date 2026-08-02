@@ -7,7 +7,7 @@
  *   3. Seeded weighted selection (including no-event outcome).
  *   4. Evaluate option availability (conditions).
  *   5. Perform skill checks with success tiers.
- *   6. Apply effects atomically.
+ *   6. Apply effects atomically (validate-first, rollback on failure).
  *   7. Track cooldowns, once-only flags, and follow-ups.
  */
 
@@ -25,13 +25,12 @@ import type {
   WeightedOutcome,
   Effect,
 } from "../content/event-definitions";
-import type { Attributes } from "../schemas/meters";
+import type { Attributes, Meters } from "../schemas/meters";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
 export type EventSelectionResult =
-  | { type: "no-event" }
-  | { type: "event-selected"; event: EventDefinition };
+  { type: "no-event" } | { type: "event-selected"; event: EventDefinition };
 
 export type OptionAvailability = {
   optionId: string;
@@ -79,13 +78,29 @@ function evaluateLeaf(leaf: ConditionLeaf, state: GameState): boolean {
     case "neq":
       return actual !== value;
     case "gt":
-      return typeof actual === "number" && typeof value === "number" && actual > value;
+      return (
+        typeof actual === "number" &&
+        typeof value === "number" &&
+        actual > value
+      );
     case "gte":
-      return typeof actual === "number" && typeof value === "number" && actual >= value;
+      return (
+        typeof actual === "number" &&
+        typeof value === "number" &&
+        actual >= value
+      );
     case "lt":
-      return typeof actual === "number" && typeof value === "number" && actual < value;
+      return (
+        typeof actual === "number" &&
+        typeof value === "number" &&
+        actual < value
+      );
     case "lte":
-      return typeof actual === "number" && typeof value === "number" && actual <= value;
+      return (
+        typeof actual === "number" &&
+        typeof value === "number" &&
+        actual <= value
+      );
     case "has":
       return resolveHas(leaf.field, String(value), state);
     case "not-has":
@@ -93,7 +108,10 @@ function evaluateLeaf(leaf: ConditionLeaf, state: GameState): boolean {
   }
 }
 
-function resolveField(field: string, state: GameState): string | number | boolean | undefined {
+function resolveField(
+  field: string,
+  state: GameState,
+): string | number | boolean | undefined {
   switch (field) {
     case "chapter":
       return state.location.chapter;
@@ -112,21 +130,17 @@ function resolveField(field: string, state: GameState): string | number | boolea
     case "runStatus":
       return state.runStatus;
     default: {
-      // meter.<name>
       if (field.startsWith("meter.")) {
-        const meterName = field.slice(6) as keyof typeof state.party.player.meters;
+        const meterName = field.slice(6) as keyof Meters;
         return state.party.player.meters[meterName];
       }
-      // attribute.<name>
       if (field.startsWith("attribute.")) {
         const attrName = field.slice(10) as keyof Attributes;
         return state.party.player.attributes[attrName];
       }
-      // flag
       if (field === "flag") {
         return undefined; // use "has"/"not-has" ops for flags
       }
-      // pursuit.intensity
       if (field === "pursuit.intensity") {
         return state.pursuit.intensity;
       }
@@ -148,7 +162,9 @@ function resolveHas(field: string, value: string, state: GameState): boolean {
     return state.party.companions.some((c) => c.id === value);
   }
   if (field === "visitedNode") {
-    return state.location.visitedNodeIds.includes(value as typeof state.location.visitedNodeIds[number]);
+    return state.location.visitedNodeIds.includes(
+      value as (typeof state.location.visitedNodeIds)[number],
+    );
   }
   if (field === "hazard") {
     return state.world.activeHazards.includes(value);
@@ -192,7 +208,6 @@ export function filterCandidates(
 
 /**
  * NO_EVENT_WEIGHT: probability weight for "no event happens this turn".
- * This ensures a deterministic no-event outcome is always possible.
  */
 const NO_EVENT_WEIGHT = 20;
 
@@ -259,12 +274,13 @@ function describeUnmetRequirements(
     return unmet.join("; ");
   }
   if ("any" in condition) {
-    return "Requires one of: " + condition.any.map((c) => describeLeaf(c)).join(", ");
+    return (
+      "Requires one of: " + condition.any.map((c) => describeLeaf(c)).join(", ")
+    );
   }
   if ("not" in condition) {
     return "Must not: " + describeLeaf(condition.not);
   }
-  // Leaf
   return describeLeafRequirement(condition);
 }
 
@@ -316,7 +332,6 @@ export function resolveSkillCheck(
   const attrValue = getAttributeValue(check.attribute, state);
   const [nextRng, dieRoll] = nextInt(rng, 1, 20);
 
-  // Natural 1 / 20
   if (dieRoll === 1) return [nextRng, "critical-failure"];
   if (dieRoll === 20) return [nextRng, "critical-success"];
 
@@ -333,7 +348,6 @@ function getAttributeValue(attribute: string, state: GameState): number {
   if (attribute in attrs) {
     return attrs[attribute as keyof Attributes];
   }
-  // Derived skills could be added here; default to 0.
   return 0;
 }
 
@@ -341,8 +355,6 @@ function getAttributeValue(attribute: string, state: GameState): number {
 
 /**
  * Select an outcome based on the tier (if skill check was made).
- * Filters outcomes by tier, then does weighted selection among matches.
- * If no tier-specific outcomes exist, falls back to untiered outcomes.
  */
 export function selectOutcome(
   outcomes: ReadonlyArray<WeightedOutcome>,
@@ -352,18 +364,14 @@ export function selectOutcome(
   let eligible: WeightedOutcome[];
 
   if (tier) {
-    // First try tier-specific outcomes
     eligible = outcomes.filter((o) => o.tier === tier);
-    // Fall back to untiered outcomes if none match
     if (eligible.length === 0) {
       eligible = outcomes.filter((o) => !o.tier);
     }
-    // If still none, use all outcomes
     if (eligible.length === 0) {
       eligible = [...outcomes];
     }
   } else {
-    // No check — use untiered outcomes, or all if none are untiered
     eligible = outcomes.filter((o) => !o.tier);
     if (eligible.length === 0) {
       eligible = [...outcomes];
@@ -371,7 +379,6 @@ export function selectOutcome(
   }
 
   if (eligible.length === 1) {
-    // Skip RNG consumption for single outcome for determinism consistency
     return [rng, eligible[0]!];
   }
 
@@ -387,41 +394,67 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * Validate that all effects in the batch can be applied.
+ * Returns an error message if validation fails, undefined if valid.
+ */
+export function validateEffectBatch(
+  effects: ReadonlyArray<Effect>,
+  state: GameState,
+): string | undefined {
+  for (const effect of effects) {
+    switch (effect.type) {
+      case "meter": {
+        const key = effect.meter as keyof Meters;
+        if (!(key in state.party.player.meters)) {
+          return `Unknown meter "${effect.meter}"`;
+        }
+        break;
+      }
+      case "flag-set":
+      case "flag-clear":
+      case "time":
+      case "follow-up":
+        break;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Apply effects atomically to game state.
- * Returns the new state and domain events for each effect.
+ * Caller must validate first with validateEffectBatch().
+ * Returns the new state, domain events, and any queued follow-up event ID.
  */
 export function applyEffects(
   effects: ReadonlyArray<Effect>,
   state: GameState,
-  _currentTurn: number,
-): { state: GameState; events: DomainEvent[] } {
+): { state: GameState; events: DomainEvent[]; followUp?: string } {
   let s = state;
   const domainEvents: DomainEvent[] = [];
+  let followUp: string | undefined;
 
   for (const effect of effects) {
     switch (effect.type) {
       case "meter": {
         const meters = { ...s.party.player.meters };
         const key = effect.meter as keyof typeof meters;
-        if (key in meters) {
-          const oldVal = meters[key];
-          const newVal = clamp(oldVal + effect.delta, 0, 100);
-          meters[key] = newVal;
-          domainEvents.push({
-            type: "METER_CHANGED",
-            subjectId: "player",
-            meter: effect.meter,
-            delta: newVal - oldVal,
-            newValue: newVal,
-          });
-          s = {
-            ...s,
-            party: {
-              ...s.party,
-              player: { ...s.party.player, meters },
-            },
-          };
-        }
+        const oldVal = meters[key];
+        const newVal = clamp(oldVal + effect.delta, 0, 100);
+        meters[key] = newVal;
+        domainEvents.push({
+          type: "METER_CHANGED",
+          subjectId: "player",
+          meter: effect.meter,
+          delta: newVal - oldVal,
+          newValue: newVal,
+        });
+        s = {
+          ...s,
+          party: {
+            ...s.party,
+            player: { ...s.party.player, meters },
+          },
+        };
         break;
       }
       case "flag-set": {
@@ -465,17 +498,14 @@ export function applyEffects(
         });
         break;
       }
-      case "item-add":
-      case "item-remove":
-      case "reputation":
-      case "follow-up":
-        // These effects are tracked but their full implementation depends on
-        // systems beyond this issue's scope. Record them as domain events.
+      case "follow-up": {
+        followUp = effect.eventId;
         break;
+      }
     }
   }
 
-  return { state: s, events: domainEvents };
+  return { state: s, events: domainEvents, followUp };
 }
 
 // ── Full event resolution (CHOOSE_EVENT_OPTION) ──────────────────────────────
@@ -483,11 +513,11 @@ export function applyEffects(
 /**
  * Resolve a player's choice for an active event.
  *
- * Preconditions:
- *   - The event must exist in the content registry.
- *   - The option must belong to that event.
- *   - The option must be available (requirements met).
- *   - The event must not have already been resolved this turn (no duplicates).
+ * Preconditions (enforced by caller in reducer):
+ *   - The event must be the currently active/pending event.
+ *   - Once/cooldown rules must be satisfied.
+ *   - The event trigger must still be met.
+ *   - The option must belong to that event and be available.
  */
 export function resolveEventChoice(
   event: EventDefinition,
@@ -501,7 +531,12 @@ export function resolveEventChoice(
     return {
       state,
       rng,
-      events: [{ type: "COMMAND_REJECTED", reason: `Option "${optionId}" not found in event "${event.id}".` }],
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Option "${optionId}" not found in event "${event.id}".`,
+        },
+      ],
       outcomeText: "",
     };
   }
@@ -511,7 +546,12 @@ export function resolveEventChoice(
     return {
       state,
       rng,
-      events: [{ type: "COMMAND_REJECTED", reason: `Option "${optionId}" requirements not met.` }],
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Option "${optionId}" requirements not met.`,
+        },
+      ],
       outcomeText: "",
     };
   }
@@ -525,11 +565,31 @@ export function resolveEventChoice(
   }
 
   // Select outcome
-  const [rngAfterOutcome, outcome] = selectOutcome(option.outcomes, tier, currentRng);
+  const [rngAfterOutcome, outcome] = selectOutcome(
+    option.outcomes,
+    tier,
+    currentRng,
+  );
   currentRng = rngAfterOutcome;
 
+  // Validate effect batch before applying (atomic: all or nothing)
+  const validationError = validateEffectBatch(outcome.effects, state);
+  if (validationError) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Effect validation failed: ${validationError}`,
+        },
+      ],
+      outcomeText: "",
+    };
+  }
+
   // Apply effects atomically
-  const effectResult = applyEffects(outcome.effects, state, currentTurn);
+  const effectResult = applyEffects(outcome.effects, state);
   let nextState = effectResult.state;
 
   // Record in event history
@@ -551,12 +611,16 @@ export function resolveEventChoice(
     cooldowns[event.id] = currentTurn;
   }
 
+  // Queue follow-up if any
+  const pendingFollowUp = effectResult.followUp ?? null;
+
   nextState = {
     ...nextState,
     eventHistory: {
       ...nextState.eventHistory,
       entries: [...nextState.eventHistory.entries, entry],
       cooldowns,
+      pendingFollowUp,
     },
   };
 

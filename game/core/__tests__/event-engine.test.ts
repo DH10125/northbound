@@ -4,8 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { seedToState, nextFloat, weightedChoice } from "../rng";
-import type { RngState } from "../rng";
+import { seedToState } from "../rng";
 import { applyCommand, setEventRegistry } from "../reducer";
 import {
   evaluateCondition,
@@ -17,7 +16,10 @@ import {
   applyEffects,
   resolveEventChoice,
 } from "../event-engine";
-import type { EventDefinition, ConditionTree } from "../../content/event-definitions";
+import type {
+  EventDefinition,
+  ConditionTree,
+} from "../../content/event-definitions";
 import { minimalGameState } from "../../testing/fixtures";
 import type { GameState } from "../../schemas/game-state";
 
@@ -90,10 +92,20 @@ const eventWithCheck: EventDefinition = {
       label: "Attempt the challenge",
       check: { attribute: "strength", difficulty: 10, modifier: 0 },
       outcomes: [
-        { weight: 1, tier: "critical-success", text: "Amazing success!", effects: [] },
+        {
+          weight: 1,
+          tier: "critical-success",
+          text: "Amazing success!",
+          effects: [],
+        },
         { weight: 1, tier: "success", text: "You succeeded.", effects: [] },
         { weight: 1, tier: "failure", text: "You failed.", effects: [] },
-        { weight: 1, tier: "critical-failure", text: "Disaster!", effects: [{ type: "meter", meter: "health", delta: -20 }] },
+        {
+          weight: 1,
+          tier: "critical-failure",
+          text: "Disaster!",
+          effects: [{ type: "meter", meter: "health", delta: -20 }],
+        },
       ],
     },
     {
@@ -114,8 +126,16 @@ const onceEvent: EventDefinition = {
   weight: 10,
   once: true,
   options: [
-    { id: "opt-1", label: "A", outcomes: [{ weight: 1, text: "Done.", effects: [] }] },
-    { id: "opt-2", label: "B", outcomes: [{ weight: 1, text: "Done.", effects: [] }] },
+    {
+      id: "opt-1",
+      label: "A",
+      outcomes: [{ weight: 1, text: "Done.", effects: [] }],
+    },
+    {
+      id: "opt-2",
+      label: "B",
+      outcomes: [{ weight: 1, text: "Done.", effects: [] }],
+    },
   ],
 };
 
@@ -129,8 +149,16 @@ const cooldownEvent: EventDefinition = {
   weight: 10,
   cooldownTurns: 5,
   options: [
-    { id: "opt-1", label: "A", outcomes: [{ weight: 1, text: "Done.", effects: [] }] },
-    { id: "opt-2", label: "B", outcomes: [{ weight: 1, text: "Done.", effects: [] }] },
+    {
+      id: "opt-1",
+      label: "A",
+      outcomes: [{ weight: 1, text: "Done.", effects: [] }],
+    },
+    {
+      id: "opt-2",
+      label: "B",
+      outcomes: [{ weight: 1, text: "Done.", effects: [] }],
+    },
   ],
 };
 
@@ -161,17 +189,29 @@ const eventWithRequirements: EventDefinition = {
 
 describe("evaluateCondition", () => {
   it("evaluates simple eq condition", () => {
-    const cond: ConditionTree = { field: "chapter", op: "eq", value: "pensacola-escape" };
+    const cond: ConditionTree = {
+      field: "chapter",
+      op: "eq",
+      value: "pensacola-escape",
+    };
     expect(evaluateCondition(cond, minimalGameState)).toBe(true);
   });
 
   it("evaluates neq condition", () => {
-    const cond: ConditionTree = { field: "chapter", op: "neq", value: "butternut" };
+    const cond: ConditionTree = {
+      field: "chapter",
+      op: "neq",
+      value: "butternut",
+    };
     expect(evaluateCondition(cond, minimalGameState)).toBe(true);
   });
 
   it("evaluates meter gte condition", () => {
-    const cond: ConditionTree = { field: "meter.health", op: "gte", value: 100 };
+    const cond: ConditionTree = {
+      field: "meter.health",
+      op: "gte",
+      value: 100,
+    };
     expect(evaluateCondition(cond, minimalGameState)).toBe(true);
   });
 
@@ -208,12 +248,19 @@ describe("evaluateCondition", () => {
   });
 
   it("evaluates 'has' flag", () => {
-    const cond: ConditionTree = { field: "flag", op: "has", value: "test-flag" };
+    const cond: ConditionTree = {
+      field: "flag",
+      op: "has",
+      value: "test-flag",
+    };
     expect(evaluateCondition(cond, minimalGameState)).toBe(false);
 
     const withFlag: GameState = {
       ...minimalGameState,
-      eventHistory: { ...minimalGameState.eventHistory, activeFlags: ["test-flag"] },
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        activeFlags: ["test-flag"],
+      },
     };
     expect(evaluateCondition(cond, withFlag)).toBe(true);
   });
@@ -250,7 +297,14 @@ describe("filterCandidates", () => {
       ...minimalGameState,
       eventHistory: {
         ...minimalGameState.eventHistory,
-        entries: [{ eventId: "event.test.once" as any, chosenOptionId: "opt-1", resolvedAtHour: 0, flagsSet: [] }],
+        entries: [
+          {
+            eventId: "event.test.once" as import("../../schemas/ids").EventId,
+            chosenOptionId: "opt-1",
+            resolvedAtHour: 0,
+            flagsSet: [],
+          },
+        ],
       },
     };
     const candidates = filterCandidates([onceEvent], stateWithHistory, 10);
@@ -294,8 +348,16 @@ describe("selectEvent", () => {
   });
 
   it("selection is stable regardless of input order", () => {
-    const eventA: EventDefinition = { ...basicEvent, id: "event.aaa.first", weight: 10 };
-    const eventB: EventDefinition = { ...basicEvent, id: "event.bbb.second", weight: 10 };
+    const eventA: EventDefinition = {
+      ...basicEvent,
+      id: "event.aaa.first",
+      weight: 10,
+    };
+    const eventB: EventDefinition = {
+      ...basicEvent,
+      id: "event.bbb.second",
+      weight: 10,
+    };
 
     const rng = seedToState("order-test");
     const [, resultAB] = selectEvent([eventA, eventB], rng);
@@ -306,8 +368,16 @@ describe("selectEvent", () => {
   });
 
   it("higher weight events are selected more often", () => {
-    const heavy: EventDefinition = { ...basicEvent, id: "event.aaa.heavy", weight: 100 };
-    const light: EventDefinition = { ...basicEvent, id: "event.bbb.light", weight: 1 };
+    const heavy: EventDefinition = {
+      ...basicEvent,
+      id: "event.aaa.heavy",
+      weight: 100,
+    };
+    const light: EventDefinition = {
+      ...basicEvent,
+      id: "event.bbb.light",
+      weight: 1,
+    };
 
     let rng = seedToState("weight-test");
     let heavyCount = 0;
@@ -325,7 +395,11 @@ describe("selectEvent", () => {
 
   it("no-event can be selected", () => {
     // With very low event weights, no-event should sometimes be chosen
-    const lowWeight: EventDefinition = { ...basicEvent, id: "event.test.low", weight: 1 };
+    const lowWeight: EventDefinition = {
+      ...basicEvent,
+      id: "event.test.low",
+      weight: 1,
+    };
     let rng = seedToState("no-event-test");
     let noEventCount = 0;
     for (let i = 0; i < 200; i++) {
@@ -346,7 +420,10 @@ describe("getOptionAvailability", () => {
   });
 
   it("unavailable options explain requirements", () => {
-    const avail = getOptionAvailability(eventWithRequirements.options, minimalGameState);
+    const avail = getOptionAvailability(
+      eventWithRequirements.options,
+      minimalGameState,
+    );
     const gated = avail.find((a) => a.optionId === "opt-gated");
     expect(gated?.available).toBe(false);
     expect(gated?.reason).toBeTruthy();
@@ -356,9 +433,15 @@ describe("getOptionAvailability", () => {
   it("gated option becomes available when condition is met", () => {
     const withFlag: GameState = {
       ...minimalGameState,
-      eventHistory: { ...minimalGameState.eventHistory, activeFlags: ["special-key"] },
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        activeFlags: ["special-key"],
+      },
     };
-    const avail = getOptionAvailability(eventWithRequirements.options, withFlag);
+    const avail = getOptionAvailability(
+      eventWithRequirements.options,
+      withFlag,
+    );
     const gated = avail.find((a) => a.optionId === "opt-gated");
     expect(gated?.available).toBe(true);
   });
@@ -374,13 +457,26 @@ describe("resolveSkillCheck", () => {
       minimalGameState,
       rng,
     );
-    expect(["critical-failure", "failure", "success", "critical-success"]).toContain(tier);
+    expect([
+      "critical-failure",
+      "failure",
+      "success",
+      "critical-success",
+    ]).toContain(tier);
   });
 
   it("is deterministic", () => {
     const rng = seedToState("check-det");
-    const [, tier1] = resolveSkillCheck({ attribute: "strength", difficulty: 10, modifier: 0 }, minimalGameState, rng);
-    const [, tier2] = resolveSkillCheck({ attribute: "strength", difficulty: 10, modifier: 0 }, minimalGameState, rng);
+    const [, tier1] = resolveSkillCheck(
+      { attribute: "strength", difficulty: 10, modifier: 0 },
+      minimalGameState,
+      rng,
+    );
+    const [, tier2] = resolveSkillCheck(
+      { attribute: "strength", difficulty: 10, modifier: 0 },
+      minimalGameState,
+      rng,
+    );
     expect(tier1).toBe(tier2);
   });
 
@@ -390,7 +486,11 @@ describe("resolveSkillCheck", () => {
     let crits = 0;
     for (let i = 0; i < 100; i++) {
       let tier: string;
-      [rng, tier] = resolveSkillCheck({ attribute: "strength", difficulty: 10, modifier: 100 }, minimalGameState, rng);
+      [rng, tier] = resolveSkillCheck(
+        { attribute: "strength", difficulty: 10, modifier: 100 },
+        minimalGameState,
+        rng,
+      );
       if (tier === "critical-success") crits++;
     }
     // At least 90% should be crits (only nat-1 prevents it, which is 5%)
@@ -409,9 +509,7 @@ describe("selectOutcome", () => {
   });
 
   it("falls back to untiered if tier has no matches", () => {
-    const outcomes = [
-      { weight: 1, text: "Generic.", effects: [] },
-    ];
+    const outcomes = [{ weight: 1, text: "Generic.", effects: [] }];
     const rng = seedToState("outcome-fallback");
     const [, outcome] = selectOutcome(outcomes, "critical-success", rng);
     expect(outcome.text).toBe("Generic.");
@@ -426,38 +524,40 @@ describe("applyEffects", () => {
       { type: "meter" as const, meter: "hunger", delta: 20 },
       { type: "meter" as const, meter: "thirst", delta: 15 },
     ];
-    const { state } = applyEffects(effects, minimalGameState, 0);
+    const { state } = applyEffects(effects, minimalGameState);
     expect(state.party.player.meters.hunger).toBe(20);
     expect(state.party.player.meters.thirst).toBe(15);
   });
 
   it("clamps meters to [0, 100]", () => {
     const effects = [{ type: "meter" as const, meter: "health", delta: -200 }];
-    const { state } = applyEffects(effects, minimalGameState, 0);
+    const { state } = applyEffects(effects, minimalGameState);
     expect(state.party.player.meters.health).toBe(0);
   });
 
   it("sets and clears flags", () => {
     const effects = [{ type: "flag-set" as const, flag: "test-flag" }];
-    const { state } = applyEffects(effects, minimalGameState, 0);
+    const { state } = applyEffects(effects, minimalGameState);
     expect(state.eventHistory.activeFlags).toContain("test-flag");
 
     const effects2 = [{ type: "flag-clear" as const, flag: "test-flag" }];
-    const { state: state2 } = applyEffects(effects2, state, 0);
+    const { state: state2 } = applyEffects(effects2, state);
     expect(state2.eventHistory.activeFlags).not.toContain("test-flag");
   });
 
   it("advances time", () => {
     const effects = [{ type: "time" as const, hours: 3 }];
-    const { state } = applyEffects(effects, minimalGameState, 0);
+    const { state } = applyEffects(effects, minimalGameState);
     expect(state.world.elapsedHours).toBe(3);
   });
 
   it("does not mutate original state", () => {
     const original = { ...minimalGameState };
     const effects = [{ type: "meter" as const, meter: "hunger", delta: 50 }];
-    applyEffects(effects, minimalGameState, 0);
-    expect(minimalGameState.party.player.meters.hunger).toBe(original.party.player.meters.hunger);
+    applyEffects(effects, minimalGameState);
+    expect(minimalGameState.party.player.meters.hunger).toBe(
+      original.party.player.meters.hunger,
+    );
   });
 });
 
@@ -466,43 +566,86 @@ describe("applyEffects", () => {
 describe("resolveEventChoice", () => {
   it("resolves a basic choice successfully", () => {
     const rng = seedToState("resolve-basic");
-    const result = resolveEventChoice(basicEvent, "opt-a", minimalGameState, rng, 0);
-    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(true);
+    const result = resolveEventChoice(
+      basicEvent,
+      "opt-a",
+      minimalGameState,
+      rng,
+      0,
+    );
+    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+      true,
+    );
     expect(result.outcomeText).toBe("You did A.");
     expect(result.state.eventHistory.entries).toHaveLength(1);
   });
 
   it("rejects unknown option", () => {
     const rng = seedToState("resolve-bad-opt");
-    const result = resolveEventChoice(basicEvent, "opt-nonexistent", minimalGameState, rng, 0);
+    const result = resolveEventChoice(
+      basicEvent,
+      "opt-nonexistent",
+      minimalGameState,
+      rng,
+      0,
+    );
     expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
   });
 
   it("rejects option with unmet requirements", () => {
     const rng = seedToState("resolve-gated");
-    const result = resolveEventChoice(eventWithRequirements, "opt-gated", minimalGameState, rng, 0);
+    const result = resolveEventChoice(
+      eventWithRequirements,
+      "opt-gated",
+      minimalGameState,
+      rng,
+      0,
+    );
     expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
   });
 
   it("applies effects from chosen outcome", () => {
     const rng = seedToState("resolve-effects");
-    const result = resolveEventChoice(eventWithEffects, "opt-heal", minimalGameState, rng, 0);
+    const result = resolveEventChoice(
+      eventWithEffects,
+      "opt-heal",
+      minimalGameState,
+      rng,
+      0,
+    );
     expect(result.state.party.player.meters.health).toBe(90); // -10 from 100
     expect(result.state.eventHistory.activeFlags).toContain("healed-once");
   });
 
   it("records cooldown in event history", () => {
     const rng = seedToState("resolve-cd");
-    const result = resolveEventChoice(cooldownEvent, "opt-1", minimalGameState, rng, 7);
+    const result = resolveEventChoice(
+      cooldownEvent,
+      "opt-1",
+      minimalGameState,
+      rng,
+      7,
+    );
     expect(result.state.eventHistory.cooldowns["event.test.cooldown"]).toBe(7);
   });
 
   it("records skill check result in history entry", () => {
     const rng = seedToState("resolve-check-hist");
-    const result = resolveEventChoice(eventWithCheck, "opt-check", minimalGameState, rng, 0);
+    const result = resolveEventChoice(
+      eventWithCheck,
+      "opt-check",
+      minimalGameState,
+      rng,
+      0,
+    );
     const entry = result.state.eventHistory.entries[0];
     expect(entry?.skillCheckResult).toBeDefined();
-    expect(["critical-failure", "failure", "success", "critical-success"]).toContain(entry?.skillCheckResult);
+    expect([
+      "critical-failure",
+      "failure",
+      "success",
+      "critical-success",
+    ]).toContain(entry?.skillCheckResult);
   });
 });
 
@@ -510,12 +653,23 @@ describe("resolveEventChoice", () => {
 
 describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
   beforeEach(() => {
-    setEventRegistry([basicEvent, eventWithEffects, eventWithCheck, cooldownEvent, onceEvent, eventWithRequirements]);
+    setEventRegistry([
+      basicEvent,
+      eventWithEffects,
+      eventWithCheck,
+      cooldownEvent,
+      onceEvent,
+      eventWithRequirements,
+    ]);
   });
 
   it("resolves event via reducer", () => {
     const rng = seedToState("reducer-event");
-    const cmd = { type: "CHOOSE_EVENT_OPTION" as const, eventId: "event.test.basic", optionId: "opt-a" };
+    const cmd = {
+      type: "CHOOSE_EVENT_OPTION" as const,
+      eventId: "event.test.basic",
+      optionId: "opt-a",
+    };
     const { state, events } = applyCommand(minimalGameState, cmd, rng);
     expect(events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(true);
     expect(state.eventHistory.entries).toHaveLength(1);
@@ -523,14 +677,22 @@ describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
 
   it("rejects unknown event ID", () => {
     const rng = seedToState("reducer-unknown");
-    const cmd = { type: "CHOOSE_EVENT_OPTION" as const, eventId: "event.nonexistent.id", optionId: "opt-a" };
+    const cmd = {
+      type: "CHOOSE_EVENT_OPTION" as const,
+      eventId: "event.nonexistent.id",
+      optionId: "opt-a",
+    };
     const { events } = applyCommand(minimalGameState, cmd, rng);
     expect(events[0]?.type).toBe("COMMAND_REJECTED");
   });
 
   it("prevents duplicate resolution in same turn", () => {
     const rng = seedToState("reducer-dup");
-    const cmd = { type: "CHOOSE_EVENT_OPTION" as const, eventId: "event.test.basic", optionId: "opt-a" };
+    const cmd = {
+      type: "CHOOSE_EVENT_OPTION" as const,
+      eventId: "event.test.basic",
+      optionId: "opt-a",
+    };
     const first = applyCommand(minimalGameState, cmd, rng);
     // Try to resolve again at same elapsedHours
     const second = applyCommand(first.state, cmd, first.rng);
@@ -547,7 +709,11 @@ describe("event engine – replay equivalence", () => {
 
   it("same seed and command sequence produces identical results", () => {
     const rng = seedToState("replay-event");
-    const cmd = { type: "CHOOSE_EVENT_OPTION" as const, eventId: "event.test.effects", optionId: "opt-heal" };
+    const cmd = {
+      type: "CHOOSE_EVENT_OPTION" as const,
+      eventId: "event.test.effects",
+      optionId: "opt-heal",
+    };
 
     const r1 = applyCommand(minimalGameState, cmd, rng);
     const r2 = applyCommand(minimalGameState, cmd, rng);
@@ -583,7 +749,11 @@ describe("event engine – follow-up chains", () => {
           },
         ],
       },
-      { id: "opt-skip", label: "Skip", outcomes: [{ weight: 1, text: "Skipped.", effects: [] }] },
+      {
+        id: "opt-skip",
+        label: "Skip",
+        outcomes: [{ weight: 1, text: "Skipped.", effects: [] }],
+      },
     ],
   };
 
@@ -596,8 +766,22 @@ describe("event engine – follow-up chains", () => {
     trigger: { field: "flag", op: "has", value: "chain-started" },
     weight: 10,
     options: [
-      { id: "opt-end", label: "End chain", outcomes: [{ weight: 1, text: "Chain ended.", effects: [{ type: "flag-set", flag: "chain-ended" }] }] },
-      { id: "opt-skip", label: "Skip", outcomes: [{ weight: 1, text: "Skipped.", effects: [] }] },
+      {
+        id: "opt-end",
+        label: "End chain",
+        outcomes: [
+          {
+            weight: 1,
+            text: "Chain ended.",
+            effects: [{ type: "flag-set", flag: "chain-ended" }],
+          },
+        ],
+      },
+      {
+        id: "opt-skip",
+        label: "Skip",
+        outcomes: [{ weight: 1, text: "Skipped.", effects: [] }],
+      },
     ],
   };
 
@@ -608,7 +792,15 @@ describe("event engine – follow-up chains", () => {
   it("follow-up flag enables second event in chain", () => {
     const rng = seedToState("chain-test");
     // Resolve first event
-    const r1 = applyCommand(minimalGameState, { type: "CHOOSE_EVENT_OPTION", eventId: "event.test.chain1", optionId: "opt-start" }, rng);
+    const r1 = applyCommand(
+      minimalGameState,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.chain1",
+        optionId: "opt-start",
+      },
+      rng,
+    );
     expect(r1.state.eventHistory.activeFlags).toContain("chain-started");
 
     // Now chain2 should be eligible
@@ -616,12 +808,161 @@ describe("event engine – follow-up chains", () => {
     expect(candidates).toHaveLength(1);
 
     // Resolve second event
-    const r2 = applyCommand(r1.state, { type: "CHOOSE_EVENT_OPTION", eventId: "event.test.chain2", optionId: "opt-end" }, r1.rng);
+    const r2 = applyCommand(
+      r1.state,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.chain2",
+        optionId: "opt-end",
+      },
+      r1.rng,
+    );
     expect(r2.state.eventHistory.activeFlags).toContain("chain-ended");
   });
 
   it("follow-up event is not available without setup flag", () => {
     const candidates = filterCandidates([chainEvent2], minimalGameState, 0);
     expect(candidates).toHaveLength(0);
+  });
+
+  it("resolving chain1 sets pendingFollowUp in state", () => {
+    const rng = seedToState("chain-pending");
+    const r1 = applyCommand(
+      minimalGameState,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.chain1",
+        optionId: "opt-start",
+      },
+      rng,
+    );
+    expect(r1.state.eventHistory.pendingFollowUp).toBe("event.test.chain2");
+  });
+
+  it("pendingFollowUp blocks resolving unrelated events", () => {
+    const stateWithPending: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        pendingFollowUp: "event.test.chain2",
+        activeFlags: ["chain-started"],
+      },
+    };
+    setEventRegistry([chainEvent1, chainEvent2]);
+    const rng = seedToState("block-unrelated");
+    const result = applyCommand(
+      stateWithPending,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.chain1",
+        optionId: "opt-start",
+      },
+      rng,
+    );
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
+  });
+
+  it("pendingFollowUp allows resolving the follow-up event (bypass trigger)", () => {
+    // chain2 trigger requires flag "chain-started" — set pendingFollowUp but NOT the flag
+    const stateWithPending: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        pendingFollowUp: "event.test.chain2",
+      },
+    };
+    setEventRegistry([chainEvent1, chainEvent2]);
+    const rng = seedToState("allow-followup");
+    const result = applyCommand(
+      stateWithPending,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.chain2",
+        optionId: "opt-end",
+      },
+      rng,
+    );
+    // Should succeed even without trigger met (follow-up bypasses trigger)
+    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+      true,
+    );
+    expect(result.state.eventHistory.pendingFollowUp).toBeNull();
+  });
+});
+
+// ── Resolution legitimacy ─────────────────────────────────────────────────────
+
+describe("applyCommand – resolution legitimacy enforcement", () => {
+  beforeEach(() => {
+    setEventRegistry([basicEvent, onceEvent, cooldownEvent, eventWithEffects]);
+  });
+
+  it("rejects once-only event already resolved", () => {
+    const stateResolved: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        entries: [
+          {
+            eventId: "event.test.once" as import("../../schemas/ids").EventId,
+            chosenOptionId: "opt-1",
+            resolvedAtHour: 0,
+            flagsSet: [],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("once-reject");
+    const result = applyCommand(
+      stateResolved,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.once",
+        optionId: "opt-1",
+      },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+
+  it("rejects event on cooldown", () => {
+    const stateOnCooldown: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        cooldowns: { "event.test.cooldown": 0 },
+      },
+    };
+    const rng = seedToState("cd-reject");
+    // elapsedHours=0 → currentTurn=0, lastTurn=0, 0-0=0 < 5 → on cooldown
+    const result = applyCommand(
+      stateOnCooldown,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.cooldown",
+        optionId: "opt-1",
+      },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+
+  it("rejects event whose trigger is not met", () => {
+    // basicEvent trigger requires chapter=pensacola-escape
+    const stateWrongChapter: GameState = {
+      ...minimalGameState,
+      location: { ...minimalGameState.location, chapter: "butternut" },
+    };
+    const rng = seedToState("trigger-reject");
+    const result = applyCommand(
+      stateWrongChapter,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.test.basic",
+        optionId: "opt-a",
+      },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
   });
 });

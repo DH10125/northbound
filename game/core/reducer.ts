@@ -29,7 +29,7 @@ import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
 import type { StorageLocation } from "./inventory-types";
 import type { ItemInstanceId } from "../schemas/ids";
 import { applyChooseRoute } from "./route-resolution";
-import { resolveEventChoice } from "./event-engine";
+import { resolveEventChoice, evaluateCondition } from "./event-engine";
 import type { EventDefinition } from "../content/event-definitions";
 
 // ── Result type ───────────────────────────────────────────────────────────────
@@ -577,24 +577,121 @@ function applyChooseEventOption(
     return {
       state,
       rng,
-      events: [{ type: "COMMAND_REJECTED", reason: `Event "${eventId}" not found in registry.` }],
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" not found in registry.`,
+        },
+      ],
     };
   }
 
-  // Prevent duplicate resolution
+  // ── Resolution legitimacy checks ──────────────────────────────────────────
+
+  // If there is a pendingFollowUp, only that event can be resolved next
+  if (
+    state.eventHistory.pendingFollowUp !== null &&
+    state.eventHistory.pendingFollowUp !== eventId
+  ) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Pending follow-up "${state.eventHistory.pendingFollowUp}" must be resolved first.`,
+        },
+      ],
+    };
+  }
+
+  // Once-only: cannot resolve if already in history
+  if (event.once) {
+    if (state.eventHistory.entries.some((e) => e.eventId === eventId)) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" is once-only and already resolved.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Cooldown check
+  const currentTurn = Math.floor(state.world.elapsedHours / 4);
+  if (event.cooldownTurns != null && event.cooldownTurns > 0) {
+    const lastTurn = state.eventHistory.cooldowns[eventId];
+    if (lastTurn != null && currentTurn - lastTurn < event.cooldownTurns) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" is on cooldown.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Trigger condition must still be met (unless it's a pending follow-up)
+  if (state.eventHistory.pendingFollowUp !== eventId) {
+    if (!evaluateCondition(event.trigger, state)) {
+      return {
+        state,
+        rng,
+        events: [
+          {
+            type: "COMMAND_REJECTED",
+            reason: `Event "${eventId}" trigger conditions not met.`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Prevent duplicate resolution in same hour
   const alreadyResolved = state.eventHistory.entries.some(
-    (e) => e.eventId === eventId && e.resolvedAtHour === state.world.elapsedHours,
+    (e) =>
+      e.eventId === eventId && e.resolvedAtHour === state.world.elapsedHours,
   );
   if (alreadyResolved) {
     return {
       state,
       rng,
-      events: [{ type: "COMMAND_REJECTED", reason: `Event "${eventId}" already resolved this turn.` }],
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" already resolved this turn.`,
+        },
+      ],
     };
   }
 
-  const currentTurn = Math.floor(state.world.elapsedHours / 4); // approximate turn number
-  const result = resolveEventChoice(event, optionId, state, rng, currentTurn);
+  // Clear pendingFollowUp before resolving (it will be set again if this event chains)
+  let stateForResolution = state;
+  if (state.eventHistory.pendingFollowUp === eventId) {
+    stateForResolution = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        pendingFollowUp: null,
+      },
+    };
+  }
+
+  const result = resolveEventChoice(
+    event,
+    optionId,
+    stateForResolution,
+    rng,
+    currentTurn,
+  );
 
   return {
     state: result.state,
