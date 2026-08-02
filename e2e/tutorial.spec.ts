@@ -192,118 +192,97 @@ test.describe("Pensacola tutorial E2E", () => {
     await expect(page.getByRole("link", { name: /create/i })).toBeVisible();
   });
 
-  test("recovery path: encounter setback, take recovery action, verify state", async ({
+  test("recovery path: exhaustion setback triggers recovery that lowers fatigue", async ({
     page,
   }) => {
+    // Create character to generate a valid versioned save
     await createCharacterAndPlay(page, "Recovery Tester");
     await expect(page.getByRole("heading", { name: /journey/i })).toBeVisible();
 
-    // Travel until an event triggers, or trigger one manually via "Look around"
-    // We'll try to trigger an event; if none available, travel first then try again
-    let eventEncountered = false;
-    const maxAttempts = 15;
+    // Modify the persisted save to set fatigue=75 (triggers exhaustion-check event
+    // which requires meter.fatigue >= 70, chapter=pensacola-escape, no exhaustion-warned flag)
+    const SAVE_KEY = "northbound-save";
+    await page.evaluate((key) => {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) throw new Error("No save found in sessionStorage");
+      const envelope = JSON.parse(raw);
+      envelope.state.party.player.meters.fatigue = 75;
+      // Ensure the flag is not already set
+      envelope.state.eventHistory.activeFlags =
+        envelope.state.eventHistory.activeFlags.filter(
+          (f: string) => f !== "exhaustion-warned",
+        );
+      sessionStorage.setItem(key, JSON.stringify(envelope));
+    }, SAVE_KEY);
 
-    for (let i = 0; i < maxAttempts && !eventEncountered; i++) {
-      // Check for event trigger button
-      const eventBtn = page.getByRole("button", { name: /look around/i });
-      if (await eventBtn.isVisible().catch(() => false)) {
-        await eventBtn.click();
-        await page.waitForTimeout(300);
+    // Reload to pick up the modified save
+    await page.reload();
+    await expect(page.getByRole("heading", { name: /journey/i })).toBeVisible({
+      timeout: 5000,
+    });
 
-        // Check if an event panel appeared with options
-        const eventOption = page
-          .locator(".event-option-button:not([disabled])")
-          .first();
-        if (await eventOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-          // Record health before the event choice
-          const healthSection = page.locator(
-            "section[aria-label='Player status']",
-          );
-          const healthVisible = await healthSection
-            .isVisible()
-            .catch(() => false);
+    // Verify fatigue is 75 before recovery
+    const fatigueBefore = await page.evaluate(() => {
+      const raw = sessionStorage.getItem("northbound-save");
+      if (!raw) return -1;
+      const envelope = JSON.parse(raw);
+      return envelope.state.party.player.meters.fatigue as number;
+    });
+    expect(fatigueBefore).toBe(75);
 
-          // Choose the first available option (may cause setback)
-          await eventOption.click();
-          await page.waitForTimeout(300);
+    // Click "Look around" to trigger the exhaustion-check event
+    const eventBtn = page.getByRole("button", { name: /look around/i });
+    await expect(eventBtn).toBeVisible({ timeout: 5000 });
+    await eventBtn.click();
 
-          // An event outcome should be showing
-          const outcomeSection = page.locator(
-            "section[aria-label='Event outcome']",
-          );
-          if (
-            await outcomeSection.isVisible({ timeout: 2000 }).catch(() => false)
-          ) {
-            // Resolution text should be visible
-            await expect(outcomeSection.locator("p").first()).not.toBeEmpty();
-            eventEncountered = true;
+    // The exhaustion event panel should appear with title "Hitting the Wall"
+    await expect(page.getByText("Hitting the Wall")).toBeVisible({
+      timeout: 5000,
+    });
 
-            // Dismiss the outcome
-            const continueBtn = page.getByRole("button", {
-              name: /^continue$/i,
-            });
-            await continueBtn.click();
+    // Select the recovery option: "Find a sheltered spot and rest"
+    const recoveryOption = page
+      .locator(".event-option-button")
+      .filter({ hasText: /Find a sheltered spot and rest/i });
+    await expect(recoveryOption).toBeVisible();
+    await recoveryOption.click();
 
-            // After recovery/dismissal, the player should still be on the play page
-            // with route options or event options visible
-            if (healthVisible) {
-              await expect(healthSection).toBeVisible();
-            }
-          } else {
-            // Event was already auto-dismissed; that still counts
-            eventEncountered = true;
-          }
-          continue;
-        }
-      }
+    // An outcome should show the recovery text
+    const outcomeSection = page.locator("section[aria-label='Event outcome']");
+    await expect(outcomeSection).toBeVisible({ timeout: 5000 });
+    await expect(
+      outcomeSection.getByText(/rest helps clear the fog/i),
+    ).toBeVisible();
 
-      // If no event available, try continuing or travelling
-      const continueBtn = page.getByRole("button", { name: /^continue$/i });
-      if (await continueBtn.isVisible().catch(() => false)) {
-        await continueBtn.click();
-        continue;
-      }
+    // Dismiss the outcome
+    const continueBtn = page.getByRole("button", { name: /^continue$/i });
+    await expect(continueBtn).toBeVisible();
+    await continueBtn.click();
 
-      // Travel to generate state that may unlock events
-      const routeBtn = page
-        .locator("button")
-        .filter({ hasText: /→.*Distance/i })
-        .first();
-      if (await routeBtn.isVisible().catch(() => false)) {
-        await routeBtn.click();
-        await page.waitForTimeout(300);
-        continue;
-      }
-      break;
-    }
+    // Assert fatigue decreased (was 75, recovery applies -20 → 55)
+    const fatigueAfter = await page.evaluate(() => {
+      const raw = sessionStorage.getItem("northbound-save");
+      if (!raw) return -1;
+      const envelope = JSON.parse(raw);
+      return envelope.state.party.player.meters.fatigue as number;
+    });
+    expect(fatigueAfter).toBe(55);
 
-    // Verify an event was actually encountered — the test must not silently pass
-    expect(
-      eventEncountered,
-      "Expected to encounter at least one event during gameplay",
-    ).toBe(true);
+    // Assert the run is still active (not ended)
+    const runStatus = await page.evaluate(() => {
+      const raw = sessionStorage.getItem("northbound-save");
+      if (!raw) return "";
+      const envelope = JSON.parse(raw);
+      return envelope.state.runStatus as string;
+    });
+    expect(runStatus).toBe("active");
 
-    // After the event and recovery, the game should still be playable
-    // (either route buttons or event buttons must be visible, OR chapter complete)
-    const routeVisible = await page
+    // Game should still be playable — route buttons visible
+    const routeBtn = page
       .locator("button")
       .filter({ hasText: /→.*Distance/i })
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const eventVisible = await page
-      .getByRole("button", { name: /look around/i })
-      .isVisible()
-      .catch(() => false);
-    const chapterDone = await page
-      .getByText("Chapter Complete")
-      .isVisible()
-      .catch(() => false);
-
-    expect(
-      routeVisible || eventVisible || chapterDone,
-      "After recovery, the game should still be playable or chapter complete",
-    ).toBe(true);
+      .first();
+    await expect(routeBtn).toBeVisible({ timeout: 5000 });
   });
 
   test("keyboard navigation: route button activates with Enter", async ({
