@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameState } from "@/game/schemas/game-state";
-import { GameStateSchema } from "@/game/schemas/game-state";
 import type { RngState } from "@/game/core/rng";
 import { applyCommand, setEventRegistry } from "@/game/core/reducer";
 import { PENSACOLA_EVENTS } from "@/game/content/pensacola-events";
@@ -20,10 +19,10 @@ import {
 import type { EventDefinition } from "@/game/content/event-definitions";
 import type { NodeId, EdgeId } from "@/game/schemas/ids";
 import type { DomainEvent } from "@/game/core/domain-events";
-
-// ── Storage key ──────────────────────────────────────────────────────────────
-
-const SAVE_KEY = "northbound-save";
+import {
+  writeSave,
+  readSave,
+} from "@/game/core/save-helpers";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,15 +75,8 @@ function playReducer(state: PlayState, action: PlayAction): PlayState {
       const chapterComplete =
         action.events.some((e) => e.type === "CHAPTER_TRANSITIONED") ||
         action.game.location.chapter !== "pensacola-escape";
-      // Auto-save
-      try {
-        sessionStorage.setItem(
-          SAVE_KEY,
-          JSON.stringify({ state: action.game, rng: action.rng }),
-        );
-      } catch {
-        /* quota exceeded — ignore */
-      }
+      // Auto-save using validated helper
+      writeSave(sessionStorage, action.game, action.rng);
       return {
         ...state,
         game: action.game,
@@ -120,17 +112,10 @@ export default function PlayPage() {
   // Register events and load save on mount
   useEffect(() => {
     setEventRegistry(PENSACOLA_EVENTS);
-    const raw = sessionStorage.getItem(SAVE_KEY);
-    if (!raw) return;
-    try {
-      const data = JSON.parse(raw) as { state: GameState; rng: RngState };
-      const parsed = GameStateSchema.safeParse(data.state);
-      if (!parsed.success) return;
-      dispatch({ type: "LOAD", game: data.state, rng: data.rng });
-      setLoaded(true);
-    } catch {
-      /* corrupt save — ignore */
-    }
+    const loadResult = readSave(sessionStorage);
+    if (!loadResult.ok) return;
+    dispatch({ type: "LOAD", game: loadResult.state, rng: loadResult.rng });
+    setLoaded(true);
   }, []);
 
   // ── Event activation ────────────────────────────────────────────────────────
@@ -179,17 +164,24 @@ export default function PlayPage() {
         },
         state.rng,
       );
-      // Find the outcome text from the event definition
-      const option = state.activeEvent.options.find(
-        (o: { id: string }) => o.id === optionId,
+      // Find the actual resolved outcome text from domain events
+      const resolvedEvent = result.events.find(
+        (e) => e.type === "ENCOUNTER_RESOLVED",
       );
-      const text = option?.outcomes[0]?.text ?? "You proceed.";
+      const text =
+        resolvedEvent && "outcomeText" in resolvedEvent
+          ? (resolvedEvent.outcomeText as string)
+          : "You proceed.";
+      const tier =
+        resolvedEvent && "tier" in resolvedEvent
+          ? (resolvedEvent.tier as string | undefined)
+          : undefined;
       dispatch({
         type: "APPLY",
         game: result.state,
         rng: result.rng,
         events: result.events,
-        resolutionText: text,
+        resolutionText: tier ? `[${tier}] ${text}` : text,
       });
     },
     [state.game, state.rng, state.activeEvent],

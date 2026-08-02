@@ -33,6 +33,8 @@ import type {
   TransportInstanceId,
 } from "../schemas/ids";
 import type { TransportState } from "../schemas/transport";
+import { TransportModeSchema } from "../schemas/transport";
+import { getItemDefinition } from "../content/items";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -421,9 +423,30 @@ export function validateEffectBatch(
       case "flag-clear":
       case "time":
       case "follow-up":
-      case "inventory-add":
-      case "transport-set":
         break;
+      case "inventory-add": {
+        // Validate item definition exists
+        const itemDef = getItemDefinition(effect.itemId as ItemId);
+        if (!itemDef) {
+          return `Unknown item definition "${effect.itemId}"`;
+        }
+        break;
+      }
+      case "transport-set": {
+        // Validate transport mode
+        const modeResult = TransportModeSchema.safeParse(effect.mode);
+        if (!modeResult.success) {
+          return `Invalid transport mode "${effect.mode}"`;
+        }
+        // Validate no duplicate instanceId
+        const existingTransport = state.transports.find(
+          (t) => t.instanceId === effect.instanceId,
+        );
+        if (existingTransport) {
+          return `Duplicate transport instanceId "${effect.instanceId}"`;
+        }
+        break;
+      }
     }
   }
   return undefined;

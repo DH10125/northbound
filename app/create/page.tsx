@@ -8,6 +8,7 @@ import type { CharacterDraft } from "@/game/core/character-creation";
 import { buildInitialGameState } from "@/game/core/character-creation";
 import { GameStateSchema } from "@/game/schemas/game-state";
 import { seedToState } from "@/game/core/rng";
+import { writeSave } from "@/game/core/save-helpers";
 
 export default function CreatePage() {
   const router = useRouter();
@@ -23,10 +24,7 @@ export default function CreatePage() {
         return;
       }
       const rng = seedToState(draft.seed);
-      sessionStorage.setItem(
-        "northbound-save",
-        JSON.stringify({ state: rawState, rng }),
-      );
+      writeSave(sessionStorage, rawState, rng);
       router.push("/play");
     },
     [router],

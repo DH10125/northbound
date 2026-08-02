@@ -129,6 +129,20 @@ export const NavigationUncertaintyEventSchema = z.object({
   reason: z.string().min(1),
 });
 
+export const EncounterResolvedEventSchema = z.object({
+  type: z.literal("ENCOUNTER_RESOLVED"),
+  eventId: z.string().min(1),
+  optionId: z.string().min(1),
+  outcomeText: z.string(),
+  tier: z.string().optional(),
+});
+
+export const RunEndedEventSchema = z.object({
+  type: z.literal("RUN_ENDED"),
+  reason: z.enum(["health-zero", "success", "abandoned"]),
+  newRunStatus: z.string().min(1),
+});
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const DomainEventSchema = z.discriminatedUnion("type", [
@@ -147,6 +161,8 @@ export const DomainEventSchema = z.discriminatedUnion("type", [
   RouteChosenEventSchema,
   ChapterTransitionedEventSchema,
   NavigationUncertaintyEventSchema,
+  EncounterResolvedEventSchema,
+  RunEndedEventSchema,
 ]);
 
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
@@ -170,3 +186,7 @@ export type ChapterTransitionedEvent = z.infer<
 export type NavigationUncertaintyEvent = z.infer<
   typeof NavigationUncertaintyEventSchema
 >;
+export type EncounterResolvedEvent = z.infer<
+  typeof EncounterResolvedEventSchema
+>;
+export type RunEndedEvent = z.infer<typeof RunEndedEventSchema>;
