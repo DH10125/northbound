@@ -640,7 +640,7 @@ describe("Pensacola tutorial: terminal failure", () => {
     expect(regResult).toEqual({ ok: true });
 
     let state = freshState();
-    let rng = freshRng();
+    const rng = freshRng();
 
     // Set health to critical (5) and set up conditions for injury-stumble event
     // Trigger requires: chapter=pensacola-escape, meter.fatigue>=50, flag tutorial-started, no injury-occurred
