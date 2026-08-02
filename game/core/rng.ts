@@ -105,7 +105,7 @@ export function nextFloat(state: RngState): [RngState, number] {
  * Return an integer in [min, max] (inclusive) and the next RNG state.
  *
  * Validation (throws **before** consuming state):
- *   - min and max must be finite integers.
+ *   - min and max must be safe integers (Number.isSafeInteger).
  *   - min must be <= max.
  *   - Range (max - min + 1) must not exceed Number.MAX_SAFE_INTEGER.
  */
@@ -114,11 +114,11 @@ export function nextInt(
   min: number,
   max: number,
 ): [RngState, number] {
-  if (!Number.isFinite(min) || !Number.isInteger(min)) {
-    throw new RangeError(`nextInt: min must be a finite integer, got ${min}`);
+  if (!Number.isSafeInteger(min)) {
+    throw new RangeError(`nextInt: min must be a safe integer, got ${min}`);
   }
-  if (!Number.isFinite(max) || !Number.isInteger(max)) {
-    throw new RangeError(`nextInt: max must be a finite integer, got ${max}`);
+  if (!Number.isSafeInteger(max)) {
+    throw new RangeError(`nextInt: max must be a safe integer, got ${max}`);
   }
   if (min > max) {
     throw new RangeError(`nextInt: min (${min}) > max (${max})`);
@@ -163,8 +163,10 @@ export function weightedChoice<T>(
   }
 
   const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) {
-    throw new RangeError("weightedChoice: total weight <= 0");
+  if (!Number.isFinite(total) || total <= 0) {
+    throw new RangeError(
+      `weightedChoice: total weight must be a finite positive number, got ${total}`,
+    );
   }
 
   const [next, f] = nextFloat(state);

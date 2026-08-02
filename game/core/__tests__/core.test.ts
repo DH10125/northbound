@@ -131,6 +131,12 @@ describe("nextInt", () => {
     expect(() => nextInt(s, 0, Infinity)).toThrow(RangeError);
   });
 
+  it("throws for Number.MAX_SAFE_INTEGER + 1 (unsafe integer)", () => {
+    const s = seedToState("ni-unsafe");
+    // Number.MAX_SAFE_INTEGER + 1 is not isSafeInteger
+    expect(() => nextInt(s, 0, Number.MAX_SAFE_INTEGER + 1)).toThrow(RangeError);
+  });
+
   it("does not consume state on error", () => {
     const s = seedToState("ni-no-consume");
     try { nextInt(s, 1.5, 5); } catch { /* expected */ }
@@ -198,6 +204,13 @@ describe("weightedChoice", () => {
   it("throws for Infinity weight", () => {
     const s = seedToState("wc-inf");
     expect(() => weightedChoice(s, ["a", "b"], [Infinity, 1])).toThrow(RangeError);
+  });
+
+  it("throws when sum of large finite weights overflows to Infinity", () => {
+    // Two weights that individually pass isFinite but sum to Infinity.
+    const s = seedToState("wc-overflow");
+    const huge = Number.MAX_VALUE;
+    expect(() => weightedChoice(s, ["a", "b"], [huge, huge])).toThrow(RangeError);
   });
 
   it("does not consume state on validation error", () => {
@@ -565,23 +578,24 @@ describe("diffReplay", () => {
 
   it("detects divergence when seeds differ (same event signatures)", () => {
     // TRAVEL always emits TIME_ADVANCED and TRAVEL_ADVANCED — the events look
-    // identical between runs, but the distance covered differs. The fingerprint
-    // (state+RNG) must catch this.
+    // identical between runs, but the distance covered differs. The full turn
+    // record (command+events+fingerprint) must catch this.
+    // With different initial RNG the initial fingerprint will differ, so
+    // firstDivergingTurn will be -1 (initial check), not 0.
     const commands = [{ type: "TRAVEL" as const, turnsToTravel: 1 }];
     const r1 = replay(minimalGameState, seedToState("seed-diverge-x"), commands);
     const r2 = replay(minimalGameState, seedToState("seed-diverge-y"), commands);
 
-    // The distance variance means states differ, even if event *types* match.
-    if (r1.state.location.distanceRemaining !== r2.state.location.distanceRemaining) {
-      const report = diffReplay(r1, r2);
-      expect(report.diverged).toBe(true);
-      if (report.diverged) {
-        expect(report.firstDivergingTurn).toBe(0);
-        expect(typeof report.fingerprintA).toBe("string");
-        expect(typeof report.fingerprintB).toBe("string");
-        expect(report.fingerprintA).not.toBe(report.fingerprintB);
-        expect(report.message).toMatch(/turn 0/);
-      }
+    const report = diffReplay(r1, r2);
+    // Seeds differ → initial RNG fingerprints differ → diverged at -1
+    expect(report.diverged).toBe(true);
+    if (report.diverged) {
+      // firstDivergingTurn is -1 because diffReplay catches the initial RNG mismatch
+      // before comparing any turn records.
+      expect(report.firstDivergingTurn).toBe(-1);
+      expect(typeof report.turnRecordA).toBe("string");
+      expect(typeof report.turnRecordB).toBe("string");
+      expect(report.turnRecordA).not.toBe(report.turnRecordB);
     }
   });
 
@@ -602,7 +616,6 @@ describe("diffReplay", () => {
   });
 
   it("event-signature match does not suppress state/RNG divergence", () => {
-    // Construct two ReplayResults with identical events but different fingerprints.
     const rng1 = seedToState("fp-a");
     const rng2 = seedToState("fp-b");
     const commands = [{ type: "TRAVEL" as const, turnsToTravel: 1 }];
@@ -610,14 +623,61 @@ describe("diffReplay", () => {
     const ra = replay(minimalGameState, rng1, commands);
     const rb = replay(minimalGameState, rng2, commands);
 
-    // If their states differ the fingerprint-based check must report divergence.
     if (JSON.stringify(ra.state) !== JSON.stringify(rb.state)) {
       const report = diffReplay(ra, rb);
       expect(report.diverged).toBe(true);
       if (report.diverged) {
-        expect(typeof report.fingerprintA).toBe("string");
-        expect(typeof report.fingerprintB).toBe("string");
+        expect(typeof report.turnRecordA).toBe("string");
+        expect(typeof report.turnRecordB).toBe("string");
       }
+    }
+  });
+
+  it("detects divergence with zero commands when initial state differs", () => {
+    const rng = seedToState("zero-cmd-state");
+    const stateA = minimalGameState;
+    const stateB = {
+      ...minimalGameState,
+      world: { ...minimalGameState.world, elapsedHours: 99 },
+    };
+    const ra = replay(stateA, rng, []);
+    const rb = replay(stateB, rng, []);
+    const report = diffReplay(ra, rb);
+    expect(report.diverged).toBe(true);
+    if (report.diverged) {
+      expect(report.firstDivergingTurn).toBe(-1);
+      expect(report.commandType).toBe("(initial)");
+      expect(report.message).toMatch(/initial state/i);
+    }
+  });
+
+  it("detects divergence with zero commands when initial RNG differs", () => {
+    const rngA = seedToState("rng-zero-a");
+    const rngB = seedToState("rng-zero-b");
+    const ra = replay(minimalGameState, rngA, []);
+    const rb = replay(minimalGameState, rngB, []);
+    const report = diffReplay(ra, rb);
+    expect(report.diverged).toBe(true);
+    if (report.diverged) {
+      expect(report.firstDivergingTurn).toBe(-1);
+    }
+  });
+
+  it("same state/RNG fingerprint but different commands triggers divergence", () => {
+    // Build two ReplayResults that share the same initial state+RNG but differ
+    // in the command applied. We manually construct snapshots to isolate this.
+    const rng = seedToState("cmd-diff");
+    // Apply REST — returns same distance but advances time/fatigue.
+    const r1 = replay(minimalGameState, rng, [{ type: "REST" as const, hours: 1 }]);
+    const r2 = replay(minimalGameState, rng, [{ type: "REST" as const, hours: 2 }]);
+    // hours:1 vs hours:2 — states will differ, but we also check command field.
+    const report = diffReplay(r1, r2);
+    expect(report.diverged).toBe(true);
+    if (report.diverged) {
+      expect(report.firstDivergingTurn).toBe(0);
+      // Both records should include the differing command payload
+      expect(report.turnRecordA).toContain('"hours":1');
+      expect(report.turnRecordB).toContain('"hours":2');
     }
   });
 });
