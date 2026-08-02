@@ -140,6 +140,12 @@ const tutorialTipSupplies: EventDefinition = {
           effects: [
             { type: "flag-set", flag: "tutorial-supplies-done" },
             { type: "flag-set", flag: "packed-light" },
+            {
+              type: "inventory-add",
+              itemId: "item.water.bottle-clean",
+              quantity: 2,
+            },
+            { type: "inventory-add", itemId: "item.food.ration", quantity: 2 },
           ],
         },
       ],
@@ -155,6 +161,27 @@ const tutorialTipSupplies: EventDefinition = {
             { type: "flag-set", flag: "tutorial-supplies-done" },
             { type: "flag-set", flag: "packed-heavy" },
             { type: "meter", meter: "fatigue", delta: 10 },
+            {
+              type: "inventory-add",
+              itemId: "item.water.bottle-clean",
+              quantity: 3,
+            },
+            { type: "inventory-add", itemId: "item.food.ration", quantity: 4 },
+            {
+              type: "inventory-add",
+              itemId: "item.food.canned-beans",
+              quantity: 2,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.bandage",
+              quantity: 2,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.tools.flashlight",
+              quantity: 1,
+            },
           ],
         },
       ],
@@ -327,6 +354,13 @@ const abandonedBicycle: EventDefinition = {
             { type: "flag-set", flag: "found-bicycle" },
             { type: "flag-set", flag: "has-transport" },
             { type: "meter", meter: "morale", delta: 5 },
+            {
+              type: "transport-set",
+              mode: "bicycle",
+              instanceId: "transport.pensacola.bicycle",
+              definitionId: "transport.bicycle",
+              condition: 70,
+            },
           ],
         },
       ],
@@ -373,6 +407,21 @@ const scavengeOpportunity: EventDefinition = {
           effects: [
             { type: "flag-set", flag: "pharmacy-visited" },
             { type: "flag-set", flag: "pharmacy-success" },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.bandage",
+              quantity: 2,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.painkillers",
+              quantity: 3,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.water.bottle-clean",
+              quantity: 1,
+            },
           ],
         },
         {
@@ -383,6 +432,21 @@ const scavengeOpportunity: EventDefinition = {
             { type: "flag-set", flag: "pharmacy-visited" },
             { type: "flag-set", flag: "pharmacy-jackpot" },
             { type: "meter", meter: "morale", delta: 5 },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.antibiotics",
+              quantity: 2,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.bandage",
+              quantity: 4,
+            },
+            {
+              type: "inventory-add",
+              itemId: "item.medicine.painkillers",
+              quantity: 5,
+            },
           ],
         },
         {

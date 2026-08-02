@@ -414,6 +414,8 @@ export function validateEffectBatch(
       case "flag-clear":
       case "time":
       case "follow-up":
+      case "inventory-add":
+      case "transport-set":
         break;
     }
   }
@@ -500,6 +502,58 @@ export function applyEffects(
       }
       case "follow-up": {
         followUp = effect.eventId;
+        break;
+      }
+      case "inventory-add": {
+        // Add items to the first storage (backpack)
+        const storages = s.inventory.storages.map((storage, idx) => {
+          if (idx !== 0) return storage;
+          const existing = storage.items.find(
+            (i) => i.definitionId === effect.itemId,
+          );
+          if (existing) {
+            return {
+              ...storage,
+              items: storage.items.map((i) =>
+                i.definitionId === effect.itemId
+                  ? { ...i, quantity: i.quantity + effect.quantity }
+                  : i,
+              ),
+            };
+          }
+          return {
+            ...storage,
+            items: [
+              ...storage.items,
+              {
+                instanceId: `${effect.itemId}:${s.world.elapsedHours}`,
+                definitionId: effect.itemId,
+                quantity: effect.quantity,
+                condition: 100,
+              },
+            ],
+          };
+        });
+        s = { ...s, inventory: { ...s.inventory, storages } };
+        break;
+      }
+      case "transport-set": {
+        const newTransport = {
+          instanceId: effect.instanceId,
+          definitionId: effect.definitionId,
+          mode: effect.mode,
+          condition: effect.condition,
+          fuel: null as number | null,
+          cargoItemIds: [] as string[],
+        };
+        s = {
+          ...s,
+          transports: [...s.transports, newTransport],
+          party: {
+            ...s.party,
+            activeTransportId: effect.instanceId,
+          },
+        };
         break;
       }
     }
