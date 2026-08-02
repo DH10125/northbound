@@ -6,6 +6,8 @@
  */
 
 import type { GameState } from "../schemas/game-state";
+import { getActionAvailability } from "./turn-clock";
+import type { ActionType, ActionAvailability } from "./turn-clock";
 
 // ── Party ─────────────────────────────────────────────────────────────────────
 
@@ -104,3 +106,36 @@ export function hasAnyCriticalMeter(state: GameState): boolean {
 export function clampMeter(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
+
+// ── Action availability ───────────────────────────────────────────────────────
+
+/**
+ * Return availability information for a given action in the current state.
+ * Delegates to the turn-clock module — kept here so callers only need to
+ * import from selectors.
+ */
+export function actionAvailability(
+  state: GameState,
+  action: ActionType,
+): ActionAvailability {
+  return getActionAvailability(state, action);
+}
+
+/**
+ * Return true if the given action can be taken right now.
+ * Shorthand for `actionAvailability(state, action).available`.
+ */
+export function isActionAvailable(state: GameState, action: ActionType): boolean {
+  return getActionAvailability(state, action).available;
+}
+
+/**
+ * If the action is unavailable, return the human-readable reason; otherwise "".
+ * Suitable for aria-describedby on a disabled button.
+ */
+export function disabledReason(state: GameState, action: ActionType): string {
+  return getActionAvailability(state, action).reason;
+}
+
+/** Re-export ActionType so consumers can import from selectors. */
+export type { ActionType, ActionAvailability };

@@ -62,6 +62,33 @@ export const CommandRejectedEventSchema = z.object({
   reason: z.string().min(1),
 });
 
+export const FarmClockTickedEventSchema = z.object({
+  type: z.literal("FARM_CLOCK_TICKED"),
+  /** Farm clock turns after this tick. */
+  newClockTurns: z.number().int().min(0),
+  /** Farm deadline turns (unchanged). */
+  deadlineTurns: z.number().int().min(1),
+});
+
+export const TurnResolvedEventSchema = z.object({
+  type: z.literal("TURN_RESOLVED"),
+  /** Action that completed. */
+  action: z.string().min(1),
+  /** Phase at turn start. */
+  phase: z.enum(["day", "dusk", "night", "dawn"]),
+  /** Hours elapsed this turn. */
+  hoursElapsed: z.number().int().min(1),
+  /** Annotated meter/state changes for the resolution summary. */
+  changes: z.array(
+    z.object({
+      field: z.string().min(1),
+      before: z.number(),
+      after: z.number(),
+      delta: z.number(),
+    }),
+  ),
+});
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const DomainEventSchema = z.discriminatedUnion("type", [
@@ -72,6 +99,8 @@ export const DomainEventSchema = z.discriminatedUnion("type", [
   MeterChangedEventSchema,
   TravelAdvancedEventSchema,
   CommandRejectedEventSchema,
+  FarmClockTickedEventSchema,
+  TurnResolvedEventSchema,
 ]);
 
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
@@ -84,3 +113,5 @@ export type EncounterStartedEvent = z.infer<typeof EncounterStartedEventSchema>;
 export type MeterChangedEvent = z.infer<typeof MeterChangedEventSchema>;
 export type TravelAdvancedEvent = z.infer<typeof TravelAdvancedEventSchema>;
 export type CommandRejectedEvent = z.infer<typeof CommandRejectedEventSchema>;
+export type FarmClockTickedEvent = z.infer<typeof FarmClockTickedEventSchema>;
+export type TurnResolvedEvent = z.infer<typeof TurnResolvedEventSchema>;
