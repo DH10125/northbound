@@ -57,6 +57,7 @@ export const minimalGameState: GameState = {
       },
       equippedItemIds: [],
       conditions: [],
+      permanentModifiers: [],
     },
     companions: [],
     activeTransportId: null,

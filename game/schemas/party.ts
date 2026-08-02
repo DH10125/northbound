@@ -15,6 +15,7 @@ import {
   OccupationIdSchema,
   TransportInstanceIdSchema,
 } from "./ids";
+import { ActiveConditionSchema, PermanentModifierSchema } from "./conditions";
 
 // ── Player character ──────────────────────────────────────────────────────────
 
@@ -47,8 +48,10 @@ export const PlayerSchema = z.object({
   meters: MetersSchema,
   /** Runtime instance IDs of items currently worn/equipped (subset of inventory). */
   equippedItemIds: z.array(ItemInstanceIdSchema),
-  /** Long-term consequences from the condition model. */
-  conditions: z.array(z.string()),
+  /** Active conditions (illness/injury in progress). */
+  conditions: z.array(ActiveConditionSchema),
+  /** Permanent modifiers from past conditions. */
+  permanentModifiers: z.array(PermanentModifierSchema),
 });
 
 export type Player = z.infer<typeof PlayerSchema>;

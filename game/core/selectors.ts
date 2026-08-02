@@ -9,6 +9,8 @@ import type { GameState } from "../schemas/game-state";
 import { getActionAvailability, getActionAdvisory } from "./turn-clock";
 import type { ActionType, ActionAvailability } from "./turn-clock";
 import { carriedWeight, carriedNoise, WEIGHT_CAPACITY } from "./inventory";
+import type { ActiveCondition, PermanentModifier } from "../schemas/conditions";
+import { getConditionDefinition } from "../content/conditions";
 
 // ── Party ─────────────────────────────────────────────────────────────────────
 
@@ -174,3 +176,53 @@ export function actionAdvisory(state: GameState, action: ActionType): string {
 
 /** Re-export ActionType so consumers can import from selectors. */
 export type { ActionType, ActionAvailability };
+
+// ── Conditions ─────────────────────────────────────────────────────────────
+
+/** Active conditions on the player. */
+export function playerConditions(state: GameState): readonly ActiveCondition[] {
+  return state.party.player.conditions;
+}
+
+/** Permanent modifiers on the player. */
+export function playerPermanentModifiers(
+  state: GameState,
+): readonly PermanentModifier[] {
+  return state.party.player.permanentModifiers;
+}
+
+/** True if the player has any active condition. */
+export function hasActiveConditions(state: GameState): boolean {
+  return state.party.player.conditions.length > 0;
+}
+
+/**
+ * Return why treating a condition is unavailable, or "" if it can be treated.
+ * Suitable for aria-describedby on a disabled treatment button.
+ */
+export function treatmentDisabledReason(
+  state: GameState,
+  conditionId: string,
+): string {
+  const cond = state.party.player.conditions.find(
+    (c) => c.conditionId === conditionId,
+  );
+  if (!cond) return "Condition not active.";
+  if (cond.treated) return "Already being treated.";
+
+  const def = getConditionDefinition(conditionId);
+  if (!def) return "Unknown condition.";
+
+  const item = state.inventory.storages
+    .flatMap((s) => s.items)
+    .find(
+      (i) =>
+        i.definitionId === def.treatmentItemId &&
+        i.quantity >= def.treatmentItemCost,
+    );
+  if (!item) {
+    return `Need ${def.treatmentItemCost}x ${def.treatmentItemId.replace("item.", "")}.`;
+  }
+
+  return "";
+}

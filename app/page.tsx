@@ -1,4 +1,5 @@
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { ConditionPreview } from "@/components/conditions/ConditionPreview";
 
 export default function Home() {
   return (
@@ -61,6 +62,25 @@ export default function Home() {
               textual clone of any existing game.
             </li>
           </ul>
+        </section>
+
+        {/* Condition system preview — interactive demo */}
+        <section
+          aria-labelledby="condition-demo-heading"
+          className="text-left space-y-3 rounded-[var(--radius-lg)] p-6"
+          style={{
+            border: "1px solid var(--surface-border-subtle)",
+            background: "var(--surface-inset)",
+          }}
+        >
+          <h2
+            id="condition-demo-heading"
+            className="text-sm font-semibold"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            Condition system preview
+          </h2>
+          <ConditionPreview />
         </section>
 
         {/* Status indicator demo — non-colour status for accessibility */}
