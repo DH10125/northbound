@@ -124,6 +124,7 @@ export function buildInitialGameState(draft: CharacterDraft): GameState {
         },
         equippedItemIds: [],
         conditions: [],
+        permanentModifiers: [],
       },
       companions: [],
       activeTransportId: null,

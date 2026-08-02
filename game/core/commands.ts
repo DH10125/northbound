@@ -118,6 +118,16 @@ export const ActivateEventCommandSchema = z
   })
   .strict();
 
+/**
+ * Treat a condition on the player using required items from inventory.
+ */
+export const TreatConditionCommandSchema = z
+  .object({
+    type: z.literal("TREAT_CONDITION"),
+    conditionId: z.string().min(1),
+  })
+  .strict();
+
 // ── Discriminated union ───────────────────────────────────────────────────────
 
 export const CommandSchema = z.discriminatedUnion("type", [
@@ -130,6 +140,7 @@ export const CommandSchema = z.discriminatedUnion("type", [
   TransferItemCommandSchema,
   ConsumeItemCommandSchema,
   ActivateEventCommandSchema,
+  TreatConditionCommandSchema,
 ]);
 
 export type Command = z.infer<typeof CommandSchema>;
@@ -143,6 +154,7 @@ export type UseItemCommand = z.infer<typeof UseItemCommandSchema>;
 export type ScavengeCommand = z.infer<typeof ScavengeCommandSchema>;
 export type TransferItemCommand = z.infer<typeof TransferItemCommandSchema>;
 export type ConsumeItemCommand = z.infer<typeof ConsumeItemCommandSchema>;
+export type TreatConditionCommand = z.infer<typeof TreatConditionCommandSchema>;
 
 // ── Validation helper ─────────────────────────────────────────────────────────
 

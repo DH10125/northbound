@@ -40,6 +40,8 @@ import {
   EventDefinitionSchema,
   validateEventRegistry,
 } from "../content/event-definitions";
+import { tickConditions } from "./condition-engine";
+import { getConditionDefinition } from "../content/conditions";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -67,7 +69,7 @@ const TRAVEL_VARIANCE = 10; // +/- 0..9
 function applyTurnUpkeep(
   state: GameState,
   action: "TRAVEL" | "REST" | "SCAVENGE" | "WAIT",
-): { state: GameState; changes: ResolutionChange[]; farmEvent: DomainEvent } {
+): { state: GameState; changes: ResolutionChange[]; farmEvent: DomainEvent; conditionEvents: DomainEvent[] } {
   const upkeep = computeUpkeep(action);
   const player = state.party.player;
   const m = player.meters;
@@ -78,37 +80,60 @@ function applyTurnUpkeep(
   const newFatigue = clamp(m.fatigue + upkeep.fatigue, 0, 100);
   const newSleepDebt = clamp(m.sleepDebt + upkeep.sleepDebt, 0, 100);
 
+  // Tick conditions
+  const isResting = action === "REST";
+  const condTickResult = tickConditions(
+    player.conditions,
+    player.permanentModifiers,
+    isResting,
+  );
+
+  // Apply condition meter deltas
+  let meters = {
+    ...m,
+    hunger: newHunger,
+    thirst: newThirst,
+    fatigue: newFatigue,
+    sleepDebt: newSleepDebt,
+  };
+  for (const [key, delta] of Object.entries(condTickResult.meterDeltas)) {
+    const mKey = key as keyof typeof meters;
+    if (mKey in meters) {
+      meters = { ...meters, [mKey]: clamp(meters[mKey] + delta, 0, 100) };
+    }
+  }
+
   // Farm clock tick
   const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
 
   const changes: ResolutionChange[] = [];
-  if (newHunger !== m.hunger)
+  if (meters.hunger !== m.hunger)
     changes.push({
       field: "hunger",
       before: m.hunger,
-      after: newHunger,
-      delta: newHunger - m.hunger,
+      after: meters.hunger,
+      delta: meters.hunger - m.hunger,
     });
-  if (newThirst !== m.thirst)
+  if (meters.thirst !== m.thirst)
     changes.push({
       field: "thirst",
       before: m.thirst,
-      after: newThirst,
-      delta: newThirst - m.thirst,
+      after: meters.thirst,
+      delta: meters.thirst - m.thirst,
     });
-  if (newFatigue !== m.fatigue)
+  if (meters.fatigue !== m.fatigue)
     changes.push({
       field: "fatigue",
       before: m.fatigue,
-      after: newFatigue,
-      delta: newFatigue - m.fatigue,
+      after: meters.fatigue,
+      delta: meters.fatigue - m.fatigue,
     });
-  if (newSleepDebt !== m.sleepDebt)
+  if (meters.sleepDebt !== m.sleepDebt)
     changes.push({
       field: "sleepDebt",
       before: m.sleepDebt,
-      after: newSleepDebt,
-      delta: newSleepDebt - m.sleepDebt,
+      after: meters.sleepDebt,
+      delta: meters.sleepDebt - m.sleepDebt,
     });
   if (newFarmClockTurns !== state.farm.clockTurns)
     changes.push({
@@ -124,13 +149,9 @@ function applyTurnUpkeep(
       ...state.party,
       player: {
         ...player,
-        meters: {
-          ...m,
-          hunger: newHunger,
-          thirst: newThirst,
-          fatigue: newFatigue,
-          sleepDebt: newSleepDebt,
-        },
+        meters,
+        conditions: condTickResult.conditions,
+        permanentModifiers: condTickResult.permanentModifiers,
       },
     },
     farm: {
@@ -145,7 +166,7 @@ function applyTurnUpkeep(
     deadlineTurns: state.farm.deadlineTurns,
   };
 
-  return { state: nextState, changes, farmEvent };
+  return { state: nextState, changes, farmEvent, conditionEvents: condTickResult.events };
 }
 
 /** Build a TURN_RESOLVED event from a completed turn. */
@@ -236,6 +257,7 @@ function applyTravel(
     });
 
     events.push(upkeepResult.farmEvent);
+    events.push(...upkeepResult.conditionEvents);
 
     events.push(
       buildTurnResolvedEvent({
@@ -537,6 +559,7 @@ function applyScavenge(state: GameState, rng: RngState): ReducerResult {
       newElapsedHours,
     },
     upkeepResult.farmEvent,
+    ...upkeepResult.conditionEvents,
     buildTurnResolvedEvent({
       action: "SCAVENGE",
       phase: phaseAtStart,
@@ -966,6 +989,137 @@ function applyActivateEvent(state: GameState, rng: RngState): ReducerResult {
   };
 }
 
+// ── Treat condition ──────────────────────────────────────────────────────────
+
+function applyTreatCondition(
+  state: GameState,
+  rng: RngState,
+  conditionId: string,
+): ReducerResult {
+  if (state.runStatus !== "active") {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: "Run is not active." }],
+    };
+  }
+
+  // Find the condition definition
+  const def = getConditionDefinition(conditionId);
+  if (!def) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Unknown condition "${conditionId}".`,
+        },
+      ],
+    };
+  }
+
+  // Check if the condition is active on the player
+  const condIdx = state.party.player.conditions.findIndex(
+    (c) => c.conditionId === conditionId,
+  );
+  if (condIdx === -1) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Condition "${conditionId}" is not active.`,
+        },
+      ],
+    };
+  }
+
+  const activeCond = state.party.player.conditions[condIdx]!;
+  if (activeCond.treated) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Condition "${conditionId}" is already being treated.`,
+        },
+      ],
+    };
+  }
+
+  // Check if required treatment items are available
+  const requiredItemId = def.treatmentItemId;
+  const requiredQty = def.treatmentItemCost;
+
+  const item = state.inventory.storages
+    .flatMap((s) => s.items)
+    .find(
+      (i) => i.definitionId === requiredItemId && i.quantity >= requiredQty,
+    );
+
+  if (!item) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Insufficient treatment supplies (need ${requiredQty}x ${requiredItemId}).`,
+        },
+      ],
+    };
+  }
+
+  // Consume treatment items
+  const newStorages = state.inventory.storages.map((storage) => ({
+    ...storage,
+    items: storage.items
+      .map((i) => {
+        if (i.instanceId !== item.instanceId) return i;
+        return { ...i, quantity: i.quantity - requiredQty };
+      })
+      .filter((i) => i.quantity > 0),
+  }));
+
+  // Mark condition as treated
+  const newConditions = state.party.player.conditions.map((c, idx) => {
+    if (idx !== condIdx) return c;
+    return { ...c, treated: true, treatmentTurns: 0 };
+  });
+
+  const events: DomainEvent[] = [
+    {
+      type: "ITEM_CONSUMED",
+      instanceId: item.instanceId,
+      definitionId: requiredItemId,
+      quantity: requiredQty,
+    },
+    {
+      type: "CONDITION_PROGRESS",
+      subjectId: "player",
+      conditionId,
+      delta: 0,
+    },
+  ];
+
+  const nextState: GameState = {
+    ...state,
+    inventory: { ...state.inventory, storages: newStorages },
+    party: {
+      ...state.party,
+      player: {
+        ...state.party.player,
+        conditions: newConditions,
+      },
+    },
+  };
+
+  return { state: nextState, rng, events };
+}
+
 // ── Main reducer ──────────────────────────────────────────────────────────────
 
 /**
@@ -1028,6 +1182,10 @@ export function applyCommand(
 
     case "ACTIVATE_EVENT":
       result = applyActivateEvent(state, rng);
+      break;
+
+    case "TREAT_CONDITION":
+      result = applyTreatCondition(state, rng, command.conditionId);
       break;
   }
 
