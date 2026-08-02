@@ -36,9 +36,7 @@ test.describe("Pensacola tutorial E2E", () => {
     page,
   }) => {
     await createCharacterAndPlay(page, "E2E Tester");
-    await expect(
-      page.getByRole("heading", { name: /journey/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: /journey/i })).toBeVisible();
 
     // Play: traverse routes until chapter complete or max iterations
     const maxIterations = 30;

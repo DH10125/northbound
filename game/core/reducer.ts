@@ -822,7 +822,10 @@ function applyChooseEventOption(
 
   // Check for terminal failure: health reaching 0
   let finalState = result.state;
-  if (finalState.party.player.meters.health <= 0 && finalState.runStatus === "active") {
+  if (
+    finalState.party.player.meters.health <= 0 &&
+    finalState.runStatus === "active"
+  ) {
     finalState = { ...finalState, runStatus: "ended-failure" };
     resolvedEvents.push({
       type: "RUN_ENDED",
@@ -1266,9 +1269,7 @@ export function applyCommand(
   }
 
   // Terminal failure check: any command that reduces health to 0 ends the run
-  const wasRejected2 = result.events.some(
-    (e) => e.type === "COMMAND_REJECTED",
-  );
+  const wasRejected2 = result.events.some((e) => e.type === "COMMAND_REJECTED");
   if (
     !wasRejected2 &&
     result.state.runStatus === "active" &&

@@ -257,10 +257,14 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     let cmd: Command = { type: "ACTIVATE_EVENT" };
     commands.push(cmd);
     let result = applyCommand(state, cmd, rng);
-    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(true);
+    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+      true,
+    );
     state = result.state;
     rng = result.rng;
-    expect(state.eventHistory.activeEventId).toBe("event.pensacola.tutorial-wake-up");
+    expect(state.eventHistory.activeEventId).toBe(
+      "event.pensacola.tutorial-wake-up",
+    );
 
     cmd = {
       type: "CHOOSE_EVENT_OPTION",
@@ -269,11 +273,17 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     };
     commands.push(cmd);
     result = applyCommand(state, cmd, rng);
-    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
     // Assert ENCOUNTER_RESOLVED event emitted with actual outcome text
-    const resolved1 = result.events.find((e) => e.type === "ENCOUNTER_RESOLVED");
+    const resolved1 = result.events.find(
+      (e) => e.type === "ENCOUNTER_RESOLVED",
+    );
     expect(resolved1).toBeDefined();
-    expect((resolved1 as { outcomeText: string }).outcomeText.length).toBeGreaterThan(0);
+    expect(
+      (resolved1 as { outcomeText: string }).outcomeText.length,
+    ).toBeGreaterThan(0);
     state = result.state;
     rng = result.rng;
     expect(state.eventHistory.activeFlags).toContain("tutorial-started");
@@ -285,7 +295,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     result = applyCommand(state, cmd, rng);
     state = result.state;
     rng = result.rng;
-    expect(state.eventHistory.activeEventId).toBe("event.pensacola.tutorial-tip-movement");
+    expect(state.eventHistory.activeEventId).toBe(
+      "event.pensacola.tutorial-tip-movement",
+    );
 
     cmd = {
       type: "CHOOSE_EVENT_OPTION",
@@ -294,7 +306,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     };
     commands.push(cmd);
     result = applyCommand(state, cmd, rng);
-    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
     state = result.state;
     rng = result.rng;
     expect(state.eventHistory.activeFlags).toContain("tutorial-movement-done");
@@ -305,7 +319,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     result = applyCommand(state, cmd, rng);
     state = result.state;
     rng = result.rng;
-    expect(state.eventHistory.activeEventId).toBe("event.pensacola.tutorial-tip-supplies");
+    expect(state.eventHistory.activeEventId).toBe(
+      "event.pensacola.tutorial-tip-supplies",
+    );
 
     cmd = {
       type: "CHOOSE_EVENT_OPTION",
@@ -314,14 +330,22 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     };
     commands.push(cmd);
     result = applyCommand(state, cmd, rng);
-    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
     state = result.state;
     rng = result.rng;
     expect(state.eventHistory.activeFlags).toContain("tutorial-supplies-done");
     // Assert real inventory items were added
     const itemsAfterSupplies = state.inventory.storages.flatMap((s) => s.items);
-    expect(itemsAfterSupplies.some((i) => i.definitionId === "item.water.bottle-clean")).toBe(true);
-    expect(itemsAfterSupplies.some((i) => i.definitionId === "item.food.ration")).toBe(true);
+    expect(
+      itemsAfterSupplies.some(
+        (i) => i.definitionId === "item.water.bottle-clean",
+      ),
+    ).toBe(true);
+    expect(
+      itemsAfterSupplies.some((i) => i.definitionId === "item.food.ration"),
+    ).toBe(true);
 
     // ── Stage 4: Tutorial stealth tip (opt-wait-dark) ──
     cmd = { type: "ACTIVATE_EVENT" };
@@ -329,7 +353,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     result = applyCommand(state, cmd, rng);
     state = result.state;
     rng = result.rng;
-    expect(state.eventHistory.activeEventId).toBe("event.pensacola.tutorial-tip-stealth");
+    expect(state.eventHistory.activeEventId).toBe(
+      "event.pensacola.tutorial-tip-stealth",
+    );
 
     cmd = {
       type: "CHOOSE_EVENT_OPTION",
@@ -338,7 +364,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     };
     commands.push(cmd);
     result = applyCommand(state, cmd, rng);
-    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
     state = result.state;
     rng = result.rng;
     expect(state.eventHistory.activeFlags).toContain("tutorial-stealth-done");
@@ -362,7 +390,8 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     rng = result.rng;
     // Family signal should be reachable (may or may not be next depending on weights)
     // Keep activating until we get it or use up attempts
-    let familySignalSeen = state.eventHistory.activeEventId === "event.pensacola.family-signal";
+    let familySignalSeen =
+      state.eventHistory.activeEventId === "event.pensacola.family-signal";
     if (!familySignalSeen) {
       // Resolve whatever came up and try again
       if (state.eventHistory.activeEventId) {
@@ -385,7 +414,8 @@ describe("Pensacola tutorial: deterministic golden path", () => {
       result = applyCommand(state, cmd, rng);
       state = result.state;
       rng = result.rng;
-      familySignalSeen = state.eventHistory.activeEventId === "event.pensacola.family-signal";
+      familySignalSeen =
+        state.eventHistory.activeEventId === "event.pensacola.family-signal";
     }
     // The trigger condition is met so family-signal must be reachable
     expect(evaluateCondition(familyEvent.trigger, state)).toBe(true);
@@ -398,7 +428,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
       };
       commands.push(cmd);
       result = applyCommand(state, cmd, rng);
-      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+        false,
+      );
       state = result.state;
       rng = result.rng;
       familySignalSeen = true;
@@ -419,7 +451,9 @@ describe("Pensacola tutorial: deterministic golden path", () => {
       cmd = { type: "CHOOSE_ROUTE", edgeId };
       commands.push(cmd);
       result = applyCommand(state, cmd, rng);
-      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+        false,
+      );
       state = result.state;
       rng = result.rng;
     }
@@ -427,13 +461,19 @@ describe("Pensacola tutorial: deterministic golden path", () => {
     // ── Final state assertions ──
     expect(state.location.currentNodeId).toBe("node.pensacola.exit-north");
     expect(state.location.chapter).toBe("gulf-coast");
-    expect(state.location.visitedNodeIds).toContain("node.pensacola.north-bridge");
-    expect(state.location.visitedNodeIds).toContain("node.pensacola.exit-north");
+    expect(state.location.visitedNodeIds).toContain(
+      "node.pensacola.north-bridge",
+    );
+    expect(state.location.visitedNodeIds).toContain(
+      "node.pensacola.exit-north",
+    );
 
     // Inventory has items (from supply choice)
     const finalItems = state.inventory.storages.flatMap((s) => s.items);
     expect(finalItems.length).toBeGreaterThan(0);
-    expect(finalItems.some((i) => i.definitionId === "item.water.bottle-clean")).toBe(true);
+    expect(
+      finalItems.some((i) => i.definitionId === "item.water.bottle-clean"),
+    ).toBe(true);
 
     // State is still schema-valid
     const parseResult = GameStateSchema.safeParse(state);
@@ -486,7 +526,9 @@ describe("Pensacola tutorial: alternative routes", () => {
     ] as EdgeId[];
     for (const edgeId of route) {
       const result = applyCommand(state, { type: "CHOOSE_ROUTE", edgeId }, rng);
-      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+        false,
+      );
       state = result.state;
       rng = result.rng;
     }
@@ -504,7 +546,9 @@ describe("Pensacola tutorial: alternative routes", () => {
     ] as EdgeId[];
     for (const edgeId of route) {
       const result = applyCommand(state, { type: "CHOOSE_ROUTE", edgeId }, rng);
-      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+      expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+        false,
+      );
       state = result.state;
       rng = result.rng;
     }
@@ -552,7 +596,9 @@ describe("Pensacola tutorial: recovery path", () => {
 
     // The exhaustion event or another matching event should be active
     // Regardless of which event fires, if exhaustion fires we can choose rest
-    if (state.eventHistory.activeEventId === "event.pensacola.exhaustion-check") {
+    if (
+      state.eventHistory.activeEventId === "event.pensacola.exhaustion-check"
+    ) {
       const chooseResult = applyCommand(
         state,
         {
@@ -562,7 +608,9 @@ describe("Pensacola tutorial: recovery path", () => {
         },
         rng,
       );
-      expect(chooseResult.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+      expect(
+        chooseResult.events.some((e) => e.type === "COMMAND_REJECTED"),
+      ).toBe(false);
       // Verify fatigue decreased via ENCOUNTER_RESOLVED (outcome applied through reducer)
       expect(chooseResult.state.party.player.meters.fatigue).toBeLessThan(75);
       // Verify state is still valid
@@ -637,7 +685,9 @@ describe("Pensacola tutorial: terminal failure", () => {
       { type: "ACTIVATE_EVENT" },
       result.rng,
     );
-    expect(afterResult.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
+    expect(afterResult.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      true,
+    );
     expect(afterResult.state).toEqual(result.state);
   });
 });
@@ -693,7 +743,9 @@ describe("Pensacola tutorial: skip behavior", () => {
     result = applyCommand(state, { type: "ACTIVATE_EVENT" }, rng);
     state = result.state;
     rng = result.rng;
-    expect(state.eventHistory.activeEventId).toBe("event.pensacola.tutorial-tip-movement");
+    expect(state.eventHistory.activeEventId).toBe(
+      "event.pensacola.tutorial-tip-movement",
+    );
 
     result = applyCommand(
       state,
@@ -722,10 +774,15 @@ describe("Pensacola tutorial: skip behavior", () => {
     // Route still works
     const routeResult = applyCommand(
       state,
-      { type: "CHOOSE_ROUTE", edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId },
+      {
+        type: "CHOOSE_ROUTE",
+        edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId,
+      },
       rng,
     );
-    expect(routeResult.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
+    expect(routeResult.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
   });
 });
 
@@ -785,12 +842,18 @@ describe("Pensacola tutorial: save/resume", () => {
     // Continue playing from loaded state — should produce identical results
     const fromLoaded = applyCommand(
       loaded.state,
-      { type: "CHOOSE_ROUTE", edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId },
+      {
+        type: "CHOOSE_ROUTE",
+        edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId,
+      },
       loaded.rng,
     );
     const fromOriginal = applyCommand(
       state,
-      { type: "CHOOSE_ROUTE", edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId },
+      {
+        type: "CHOOSE_ROUTE",
+        edgeId: "edge.pensacola.hotel-to-neighborhood" as EdgeId,
+      },
       rng,
     );
 
@@ -869,7 +932,9 @@ describe("Pensacola tutorial: save/resume", () => {
   it("deserializeSave rejects corrupt JSON", () => {
     expect(deserializeSave("{not valid json").ok).toBe(false);
     expect(deserializeSave('{"version": 1}').ok).toBe(false);
-    expect(deserializeSave('{"version": 99, "state": {}, "rng": []}').ok).toBe(false);
+    expect(deserializeSave('{"version": 99, "state": {}, "rng": []}').ok).toBe(
+      false,
+    );
   });
 
   it("deserializeSave handles legacy saves (no version field) gracefully", () => {
@@ -935,7 +1000,10 @@ describe("Pensacola: rejected command invariants", () => {
 
     const result = applyCommand(
       state,
-      { type: "CHOOSE_ROUTE", edgeId: "edge.pensacola.bridge-to-exit" as EdgeId },
+      {
+        type: "CHOOSE_ROUTE",
+        edgeId: "edge.pensacola.bridge-to-exit" as EdgeId,
+      },
       rng,
     );
     expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(true);
@@ -1039,7 +1107,13 @@ describe("Pensacola: effect validation (item/transport)", () => {
   it("accepts valid inventory-add with real item ID", () => {
     const state = freshState();
     const error = validateEffectBatch(
-      [{ type: "inventory-add", itemId: "item.water.bottle-clean", quantity: 1 }],
+      [
+        {
+          type: "inventory-add",
+          itemId: "item.water.bottle-clean",
+          quantity: 1,
+        },
+      ],
       state,
     );
     expect(error).toBeUndefined();

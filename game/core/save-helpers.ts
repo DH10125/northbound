@@ -86,7 +86,10 @@ export function deserializeSave(raw: string | null | undefined): LoadResult {
         savedAt: "unknown",
       };
     }
-    return { ok: false, reason: `Legacy save validation failed: ${legacyResult.error.issues[0]?.message ?? "unknown"}` };
+    return {
+      ok: false,
+      reason: `Legacy save validation failed: ${legacyResult.error.issues[0]?.message ?? "unknown"}`,
+    };
   }
 
   const result = SaveEnvelopeSchema.safeParse(parsed);
@@ -120,23 +123,25 @@ export function writeSave(
     storage.setItem(SAVE_KEY, serializeSave(state, rng));
     return { ok: true };
   } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : "Storage write failed" };
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "Storage write failed",
+    };
   }
 }
 
-export function readSave(
-  storage: Pick<Storage, "getItem">,
-): LoadResult {
+export function readSave(storage: Pick<Storage, "getItem">): LoadResult {
   try {
     const raw = storage.getItem(SAVE_KEY);
     return deserializeSave(raw);
   } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : "Storage read failed" };
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "Storage read failed",
+    };
   }
 }
 
-export function clearSave(
-  storage: Pick<Storage, "removeItem">,
-): void {
+export function clearSave(storage: Pick<Storage, "removeItem">): void {
   storage.removeItem(SAVE_KEY);
 }

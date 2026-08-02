@@ -19,10 +19,7 @@ import {
 import type { EventDefinition } from "@/game/content/event-definitions";
 import type { NodeId, EdgeId } from "@/game/schemas/ids";
 import type { DomainEvent } from "@/game/core/domain-events";
-import {
-  writeSave,
-  readSave,
-} from "@/game/core/save-helpers";
+import { writeSave, readSave } from "@/game/core/save-helpers";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
