@@ -25,6 +25,9 @@ import {
   ACTION_TURN_HOURS,
 } from "./turn-clock";
 import type { ResolutionChange, TurnSummary } from "./turn-clock";
+import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
+import type { StorageLocation } from "./inventory-types";
+import type { ItemInstanceId } from "../schemas/ids";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -230,6 +233,17 @@ function applyTravel(
         changes: upkeepResult.changes,
       }),
     );
+
+    // Spoilage: one tick per accepted travel turn
+    const spoilageResult = advanceSpoilage(s.inventory);
+    s = { ...s, inventory: spoilageResult.inventory };
+    for (const spoiled of spoilageResult.spoiledItems) {
+      events.push({
+        type: "ITEM_SPOILED",
+        instanceId: spoiled.instanceId,
+        definitionId: spoiled.definitionId,
+      });
+    }
 
     // Check run completion
     if (newDistanceRemaining === 0) {
@@ -559,6 +573,128 @@ function applyChooseEventOption(
   return { state: nextState, rng, events };
 }
 
+// ── Transfer item ────────────────────────────────────────────────────────────
+
+function applyTransferItem(
+  state: GameState,
+  rng: RngState,
+  instanceId: string,
+  fromLocation: string,
+  toLocation: string,
+  quantity: number,
+): ReducerResult {
+  if (state.runStatus !== "active") {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: "Run is not active." }],
+    };
+  }
+
+  const result = transferItem(
+    state.inventory,
+    instanceId as ItemInstanceId,
+    fromLocation as StorageLocation,
+    toLocation as StorageLocation,
+    quantity,
+  );
+
+  if (!result.ok) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: result.reason }],
+    };
+  }
+
+  // Find the definitionId for the event
+  const item = state.inventory.storages
+    .flatMap((s) => s.items)
+    .find((i) => i.instanceId === instanceId);
+
+  const nextState: GameState = {
+    ...state,
+    inventory: result.inventory,
+  };
+
+  const events: DomainEvent[] = [
+    {
+      type: "ITEM_TRANSFERRED",
+      instanceId,
+      definitionId: item?.definitionId ?? "unknown",
+      quantity,
+      fromLocation,
+      toLocation,
+    },
+  ];
+
+  return { state: nextState, rng, events };
+}
+
+// ── Consume item ─────────────────────────────────────────────────────────────
+
+function applyConsumeItem(
+  state: GameState,
+  rng: RngState,
+  instanceId: string,
+): ReducerResult {
+  if (state.runStatus !== "active") {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: "Run is not active." }],
+    };
+  }
+
+  const result = consumeItem(state.inventory, instanceId as ItemInstanceId);
+
+  if (!result.ok) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: result.reason }],
+    };
+  }
+
+  // Apply consume effects to player meters
+  const player = state.party.player;
+  const meters = { ...player.meters };
+  const events: DomainEvent[] = [];
+
+  for (const [key, delta] of Object.entries(result.effects)) {
+    if (key in meters) {
+      const oldVal = meters[key as keyof typeof meters];
+      const newVal = clamp(oldVal + delta, 0, 100);
+      meters[key as keyof typeof meters] = newVal;
+      events.push({
+        type: "METER_CHANGED",
+        subjectId: "player",
+        meter: key,
+        delta: newVal - oldVal,
+        newValue: newVal,
+      });
+    }
+  }
+
+  events.unshift({
+    type: "ITEM_CONSUMED",
+    instanceId,
+    definitionId: result.definitionId,
+    quantity: 1,
+  });
+
+  const nextState: GameState = {
+    ...state,
+    inventory: result.inventory,
+    party: {
+      ...state.party,
+      player: { ...player, meters },
+    },
+  };
+
+  return { state: nextState, rng, events };
+}
+
 // ── Main reducer ──────────────────────────────────────────────────────────────
 
 /**
@@ -572,25 +708,72 @@ export function applyCommand(
   command: Command,
   rng: RngState,
 ): ReducerResult {
+  let result: ReducerResult;
+
   switch (command.type) {
     case "TRAVEL":
-      return applyTravel(state, rng, command.turnsToTravel);
+      result = applyTravel(state, rng, command.turnsToTravel);
+      break;
 
     case "REST":
-      return applyRest(state, rng, command.hours);
+      result = applyRest(state, rng, command.hours);
+      break;
 
     case "USE_ITEM":
-      return applyUseItem(state, rng, command.instanceId, command.quantity);
+      result = applyUseItem(state, rng, command.instanceId, command.quantity);
+      break;
 
     case "SCAVENGE":
-      return applyScavenge(state, rng);
+      result = applyScavenge(state, rng);
+      break;
 
     case "CHOOSE_EVENT_OPTION":
-      return applyChooseEventOption(
+      result = applyChooseEventOption(
         state,
         rng,
         command.eventId,
         command.optionId,
       );
+      break;
+
+    case "TRANSFER_ITEM":
+      result = applyTransferItem(
+        state,
+        rng,
+        command.instanceId,
+        command.fromLocation,
+        command.toLocation,
+        command.quantity,
+      );
+      break;
+
+    case "CONSUME_ITEM":
+      result = applyConsumeItem(state, rng, command.instanceId);
+      break;
   }
+
+  // Advance spoilage once for REST/SCAVENGE (TRAVEL handles per-turn internally).
+  // Only on accepted commands — rejected commands must not alter state.
+  if (command.type === "REST" || command.type === "SCAVENGE") {
+    const wasRejected = result.events.some(
+      (e) => e.type === "COMMAND_REJECTED",
+    );
+    if (!wasRejected) {
+      const spoilageResult = advanceSpoilage(result.state.inventory);
+      result = {
+        ...result,
+        state: { ...result.state, inventory: spoilageResult.inventory },
+        events: [
+          ...result.events,
+          ...spoilageResult.spoiledItems.map((spoiled) => ({
+            type: "ITEM_SPOILED" as const,
+            instanceId: spoiled.instanceId,
+            definitionId: spoiled.definitionId,
+          })),
+        ],
+      };
+    }
+  }
+
+  return result;
 }

@@ -8,6 +8,7 @@
 import type { GameState } from "../schemas/game-state";
 import { getActionAvailability, getActionAdvisory } from "./turn-clock";
 import type { ActionType, ActionAvailability } from "./turn-clock";
+import { carriedWeight, carriedNoise, WEIGHT_CAPACITY } from "./inventory";
 
 // ── Party ─────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,27 @@ export function findItemInstance(
   return state.inventory.storages
     .flatMap((s) => s.items)
     .find((i) => i.instanceId === instanceId);
+}
+
+/** Total carried weight (body + backpack) in kg. */
+export function totalCarriedWeight(state: GameState): number {
+  return carriedWeight(state);
+}
+
+/** Weight capacity ratio (0–1+). Over 1.0 means encumbered. */
+export function encumbranceRatio(state: GameState): number {
+  const cap = WEIGHT_CAPACITY["backpack"] + WEIGHT_CAPACITY["body"];
+  return carriedWeight(state) / cap;
+}
+
+/** Whether the party is over carried weight capacity. */
+export function isEncumbered(state: GameState): boolean {
+  return encumbranceRatio(state) > 1.0;
+}
+
+/** Total noise from carried items. Used by stealth/detection systems. */
+export function totalCarriedNoise(state: GameState): number {
+  return carriedNoise(state);
 }
 
 // ── World ─────────────────────────────────────────────────────────────────────
