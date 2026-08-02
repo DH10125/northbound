@@ -624,11 +624,8 @@ export function resolveEventChoice(
     },
   };
 
-  // Build domain events
-  const domainEvents: DomainEvent[] = [
-    { type: "ENCOUNTER_STARTED", eventId: event.id },
-    ...effectResult.events,
-  ];
+  // Build domain events (ENCOUNTER_STARTED is emitted at activation, not here)
+  const domainEvents: DomainEvent[] = [...effectResult.events];
 
   return {
     state: nextState,

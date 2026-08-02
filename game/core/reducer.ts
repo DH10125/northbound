@@ -29,8 +29,17 @@ import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
 import type { StorageLocation } from "./inventory-types";
 import type { ItemInstanceId } from "../schemas/ids";
 import { applyChooseRoute } from "./route-resolution";
-import { resolveEventChoice, evaluateCondition } from "./event-engine";
+import {
+  resolveEventChoice,
+  evaluateCondition,
+  filterCandidates,
+  selectEvent,
+} from "./event-engine";
 import type { EventDefinition } from "../content/event-definitions";
+import {
+  EventDefinitionSchema,
+  validateEventRegistry,
+} from "../content/event-definitions";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -546,10 +555,39 @@ let eventRegistry: ReadonlyArray<EventDefinition> = [];
 
 /**
  * Register event definitions for use by the reducer.
- * Called once at startup with validated content.
+ * Parses each definition with EventDefinitionSchema and runs registry
+ * validation (duplicates, follow-up references, cycles).
+ * Only replaces the registry on total success; failure preserves the
+ * previous registry and returns actionable errors.
  */
-export function setEventRegistry(events: ReadonlyArray<EventDefinition>): void {
-  eventRegistry = events;
+export function setEventRegistry(
+  rawEvents: ReadonlyArray<unknown>,
+): { ok: true } | { ok: false; errors: string[] } {
+  // Parse each definition
+  const parsed: EventDefinition[] = [];
+  const parseErrors: string[] = [];
+  for (let i = 0; i < rawEvents.length; i++) {
+    const result = EventDefinitionSchema.safeParse(rawEvents[i]);
+    if (result.success) {
+      parsed.push(result.data);
+    } else {
+      parseErrors.push(
+        `Event[${i}]: ${result.error.issues.map((iss) => `${iss.path.join(".")}: ${iss.message}`).join("; ")}`,
+      );
+    }
+  }
+  if (parseErrors.length > 0) {
+    return { ok: false, errors: parseErrors };
+  }
+
+  // Run registry-level validation
+  const registryResult = validateEventRegistry(parsed);
+  if (!registryResult.valid) {
+    return { ok: false, errors: registryResult.errors };
+  }
+
+  eventRegistry = parsed;
+  return { ok: true };
 }
 
 /** Get the current event registry (for testing). */
@@ -890,6 +928,47 @@ function applyActivateEvent(
     };
   }
 
+  // Run deterministic candidate filtering and selection — the requested
+  // eventId must be the exact event that the seeded selection flow would
+  // produce.  This prevents a forged ACTIVATE_EVENT from bypassing the
+  // filter/select pipeline.
+  const currentTurn = Math.floor(state.world.elapsedHours / 4);
+  const candidates = filterCandidates(eventRegistry, state, currentTurn);
+
+  if (!candidates.some((c) => c.id === eventId)) {
+    return {
+      state,
+      rng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" is not an eligible candidate.`,
+        },
+      ],
+    };
+  }
+
+  const [nextRng, selectionResult] = selectEvent(candidates, rng);
+
+  if (
+    selectionResult.type !== "event-selected" ||
+    selectionResult.event.id !== eventId
+  ) {
+    // The seeded selection chose a different event (or no-event).
+    // Reject without setting activeEventId, but DO consume RNG so the
+    // selection is deterministic and non-replayable with a different ID.
+    return {
+      state,
+      rng: nextRng,
+      events: [
+        {
+          type: "COMMAND_REJECTED",
+          reason: `Event "${eventId}" was not selected by the seeded selection.`,
+        },
+      ],
+    };
+  }
+
   // Set the activeEventId
   const nextState: GameState = {
     ...state,
@@ -901,7 +980,7 @@ function applyActivateEvent(
 
   return {
     state: nextState,
-    rng,
+    rng: nextRng,
     events: [{ type: "ENCOUNTER_STARTED", eventId }],
   };
 }

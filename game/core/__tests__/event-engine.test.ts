@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { seedToState } from "../rng";
-import { applyCommand, setEventRegistry } from "../reducer";
+import { applyCommand, setEventRegistry, getEventRegistry } from "../reducer";
 import {
   evaluateCondition,
   filterCandidates,
@@ -61,7 +61,7 @@ const eventWithEffects: EventDefinition = {
   title: "Effects Event",
   text: "An event with meter effects.",
   tags: ["test"],
-  trigger: { all: [] },
+  trigger: { field: "runStatus", op: "eq", value: "active" },
   weight: 10,
   options: [
     {
@@ -92,7 +92,7 @@ const eventWithCheck: EventDefinition = {
   title: "Skill Check Event",
   text: "A challenge appears.",
   tags: ["test"],
-  trigger: { all: [] },
+  trigger: { field: "runStatus", op: "eq", value: "active" },
   weight: 10,
   options: [
     {
@@ -130,7 +130,7 @@ const onceEvent: EventDefinition = {
   title: "Once Only",
   text: "This happens once.",
   tags: ["test"],
-  trigger: { all: [] },
+  trigger: { field: "runStatus", op: "eq", value: "active" },
   weight: 10,
   once: true,
   options: [
@@ -153,7 +153,7 @@ const cooldownEvent: EventDefinition = {
   title: "Cooldown Event",
   text: "On cooldown.",
   tags: ["test"],
-  trigger: { all: [] },
+  trigger: { field: "runStatus", op: "eq", value: "active" },
   weight: 10,
   cooldownTurns: 5,
   options: [
@@ -176,7 +176,7 @@ const eventWithRequirements: EventDefinition = {
   title: "Gated Options",
   text: "Some options need things.",
   tags: ["test"],
-  trigger: { all: [] },
+  trigger: { field: "runStatus", op: "eq", value: "active" },
   weight: 10,
   options: [
     {
@@ -581,8 +581,8 @@ describe("resolveEventChoice", () => {
       rng,
       0,
     );
-    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
-      true,
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
     );
     expect(result.outcomeText).toBe("You did A.");
     expect(result.state.eventHistory.entries).toHaveLength(1);
@@ -683,7 +683,7 @@ describe("applyCommand – CHOOSE_EVENT_OPTION with event engine", () => {
       cmd,
       rng,
     );
-    expect(events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(true);
+    expect(events.some((e) => e.type === "COMMAND_REJECTED")).toBe(false);
     expect(state.eventHistory.entries).toHaveLength(1);
   });
 
@@ -764,7 +764,7 @@ describe("event engine – follow-up chains", () => {
     title: "Chain Start",
     text: "First in chain.",
     tags: ["test"],
-    trigger: { all: [] },
+    trigger: { field: "runStatus", op: "eq", value: "active" },
     weight: 10,
     options: [
       {
@@ -916,8 +916,8 @@ describe("event engine – follow-up chains", () => {
       rng,
     );
     // Should succeed even without trigger met (follow-up bypasses trigger)
-    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
-      true,
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
     );
     expect(result.state.eventHistory.pendingFollowUp).toBeNull();
   });
@@ -1019,5 +1019,303 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
     );
     expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
     expect(result.rng).toEqual(rng); // RNG not consumed
+  });
+});
+
+// ── ACTIVATE_EVENT deterministic authorization ────────────────────────────────
+
+describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
+  beforeEach(() => {
+    setEventRegistry([basicEvent, eventWithEffects, onceEvent, cooldownEvent]);
+  });
+
+  it("rejects activation of trigger-eligible but not selected event", () => {
+    // All registered events are eligible, but seeded selection only picks one.
+    const rng = seedToState("activation-wrong");
+    const registry = getEventRegistry();
+    const candidates = filterCandidates(registry, minimalGameState, 0);
+    expect(candidates.length).toBeGreaterThan(1);
+
+    // Run selection to determine which event is actually chosen
+    const [, selectionResult] = selectEvent(candidates, rng);
+    const selectedId =
+      selectionResult.type === "event-selected"
+        ? selectionResult.event.id
+        : null;
+
+    // Try to activate a DIFFERENT eligible event
+    const otherCandidate = candidates.find((c) => c.id !== selectedId);
+    if (!otherCandidate) return; // all candidates are the same; skip
+
+    const result = applyCommand(
+      minimalGameState,
+      { type: "ACTIVATE_EVENT", eventId: otherCandidate.id },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+    expect(result.events[0]).toHaveProperty("reason");
+  });
+
+  it("allows activation of the exact selected event", () => {
+    const rng = seedToState("activation-correct");
+    // Use the full registry that beforeEach installed
+    const registry = getEventRegistry();
+    const candidates = filterCandidates(registry, minimalGameState, 0);
+    const [, selectionResult] = selectEvent(candidates, rng);
+
+    if (selectionResult.type !== "event-selected") {
+      // no-event was selected; skip this test iteration
+      return;
+    }
+
+    const result = applyCommand(
+      minimalGameState,
+      { type: "ACTIVATE_EVENT", eventId: selectionResult.event.id },
+      rng,
+    );
+    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+      true,
+    );
+    expect(result.state.eventHistory.activeEventId).toBe(
+      selectionResult.event.id,
+    );
+  });
+
+  it("emits ENCOUNTER_STARTED exactly once (at activation, not resolution)", () => {
+    const rng = seedToState("encounter-once");
+    const registry = getEventRegistry();
+    const candidates = filterCandidates(registry, minimalGameState, 0);
+    const [, selectionResult] = selectEvent(candidates, rng);
+    if (selectionResult.type !== "event-selected") return;
+
+    // Activate
+    const activateResult = applyCommand(
+      minimalGameState,
+      { type: "ACTIVATE_EVENT", eventId: selectionResult.event.id },
+      rng,
+    );
+    const activateEncounters = activateResult.events.filter(
+      (e) => e.type === "ENCOUNTER_STARTED",
+    );
+    expect(activateEncounters).toHaveLength(1);
+
+    // Resolve
+    const resolveResult = applyCommand(
+      activateResult.state,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: selectionResult.event.id,
+        optionId: selectionResult.event.options[0]!.id,
+      },
+      activateResult.rng,
+    );
+    const resolveEncounters = resolveResult.events.filter(
+      (e) => e.type === "ENCOUNTER_STARTED",
+    );
+    expect(resolveEncounters).toHaveLength(0);
+  });
+
+  it("allows activation of exact queued follow-up via pendingFollowUp", () => {
+    // Set up chain events
+    const chainA: EventDefinition = {
+      ...basicEvent,
+      id: "event.chain.a",
+      options: [
+        {
+          id: "opt-chain",
+          label: "Chain",
+          outcomes: [
+            {
+              weight: 1,
+              text: "Chained.",
+              effects: [{ type: "follow-up", eventId: "event.chain.b" }],
+            },
+          ],
+        },
+        {
+          id: "opt-skip",
+          label: "Skip",
+          outcomes: [{ weight: 1, text: "Skipped.", effects: [] }],
+        },
+      ],
+    };
+    const chainB: EventDefinition = {
+      ...basicEvent,
+      id: "event.chain.b",
+    };
+    setEventRegistry([chainA, chainB]);
+
+    // Manually set pendingFollowUp to chain B
+    const stateWithFollowUp: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        pendingFollowUp: "event.chain.b",
+        activeEventId: "event.chain.b",
+      },
+    };
+
+    // Should be able to resolve chain B via pendingFollowUp (bypass activation)
+    const rng = seedToState("followup-resolve");
+    const result = applyCommand(
+      stateWithFollowUp,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.chain.b",
+        optionId: "opt-a",
+      },
+      rng,
+    );
+    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
+      false,
+    );
+    expect(result.state.eventHistory.entries).toHaveLength(1);
+  });
+
+  it("rejects activation of once-resolved event", () => {
+    const stateResolved: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        entries: [
+          {
+            eventId: "event.test.once" as import("../../schemas/ids").EventId,
+            chosenOptionId: "opt-1",
+            resolvedAtHour: 0,
+            flagsSet: [],
+          },
+        ],
+      },
+    };
+    const rng = seedToState("once-activate-reject");
+    const result = applyCommand(
+      stateResolved,
+      { type: "ACTIVATE_EVENT", eventId: "event.test.once" },
+      rng,
+    );
+    // once-resolved events are filtered out of candidates
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+
+  it("rejects activation of event on cooldown", () => {
+    const stateOnCooldown: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        cooldowns: { "event.test.cooldown": 0 },
+      },
+    };
+    const rng = seedToState("cooldown-activate-reject");
+    const result = applyCommand(
+      stateOnCooldown,
+      { type: "ACTIVATE_EVENT", eventId: "event.test.cooldown" },
+      rng,
+    );
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+  });
+});
+
+// ── setEventRegistry validation ───────────────────────────────────────────────
+
+describe("setEventRegistry – schema parsing and validation", () => {
+  it("accepts valid event definitions", () => {
+    const result = setEventRegistry([basicEvent]);
+    expect(result).toEqual({ ok: true });
+    expect(getEventRegistry()).toHaveLength(1);
+  });
+
+  it("rejects malformed structure (missing required fields)", () => {
+    const malformed = { id: "bad", title: "Bad" }; // missing many fields
+    const result = setEventRegistry([malformed]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain("Event[0]");
+    }
+  });
+
+  it("preserves previous registry on parse failure", () => {
+    // Install valid registry first
+    setEventRegistry([basicEvent]);
+    expect(getEventRegistry()).toHaveLength(1);
+
+    // Try to install malformed — should fail and preserve previous
+    const result = setEventRegistry([{ id: "bad" }]);
+    expect(result.ok).toBe(false);
+    expect(getEventRegistry()).toHaveLength(1);
+    expect(getEventRegistry()[0]!.id).toBe("event.test.basic");
+  });
+
+  it("rejects invalid follow-up references at installation", () => {
+    const eventWithBadFollowUp: EventDefinition = {
+      ...basicEvent,
+      id: "event.bad-followup",
+      options: [
+        {
+          id: "opt-a",
+          label: "A",
+          outcomes: [
+            {
+              weight: 1,
+              text: "X",
+              effects: [
+                { type: "follow-up", eventId: "event.nonexistent.target" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "opt-b",
+          label: "B",
+          outcomes: [{ weight: 1, text: "Y", effects: [] }],
+        },
+      ],
+    };
+    const result = setEventRegistry([eventWithBadFollowUp]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.includes("unknown follow-up"))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("rejects duplicate event IDs at installation", () => {
+    const dup: EventDefinition = { ...basicEvent };
+    const result = setEventRegistry([basicEvent, dup]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.includes("Duplicate"))).toBe(true);
+    }
+  });
+
+  it("preserves previous registry on reference validation failure", () => {
+    setEventRegistry([basicEvent]);
+    const eventWithBadRef: EventDefinition = {
+      ...basicEvent,
+      id: "event.bad-ref",
+      options: [
+        {
+          id: "opt-a",
+          label: "A",
+          outcomes: [
+            {
+              weight: 1,
+              text: "X",
+              effects: [{ type: "follow-up", eventId: "event.missing" }],
+            },
+          ],
+        },
+        {
+          id: "opt-b",
+          label: "B",
+          outcomes: [{ weight: 1, text: "Y", effects: [] }],
+        },
+      ],
+    };
+    const result = setEventRegistry([eventWithBadRef]);
+    expect(result.ok).toBe(false);
+    expect(getEventRegistry()).toHaveLength(1);
+    expect(getEventRegistry()[0]!.id).toBe("event.test.basic");
   });
 });
