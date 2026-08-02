@@ -2,7 +2,8 @@
  * Route resolution logic.
  *
  * Handles CHOOSE_ROUTE command: validates edge, resolves navigation uncertainty,
- * applies distance/wear, handles chapter transitions, and updates location state.
+ * then advances the party through the turn flow (time, upkeep, farm clock,
+ * spoilage, wear, turn summary) atomically.
  *
  * Pure, deterministic, no React/browser imports.
  */
@@ -18,6 +19,14 @@ import { pensacolaGraph } from "../content/route-graph";
 import { z } from "zod";
 import type { EdgeId, NodeId } from "../schemas/ids";
 import { ChapterSchema } from "../schemas/route";
+import {
+  hoursToPhase,
+  computeUpkeep,
+  tickFarmClock,
+  ACTION_TURN_HOURS,
+} from "./turn-clock";
+import type { ResolutionChange } from "./turn-clock";
+import { advanceSpoilage } from "./inventory";
 
 type Chapter = z.infer<typeof ChapterSchema>;
 
@@ -43,12 +52,19 @@ function currentTransportMode(state: GameState): string {
   return transport?.mode ?? "foot";
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 // ── CHOOSE_ROUTE handler ──────────────────────────────────────────────────────
 
 /**
  * Apply the CHOOSE_ROUTE command. Validates edge availability, transport mode
- * constraints, resolves navigation uncertainty, applies wear, and updates
- * location/chapter.
+ * constraints, resolves navigation uncertainty, then advances one TRAVEL turn
+ * through the standard turn flow (time, upkeep, farm clock, spoilage, wear,
+ * turn summary).
  */
 export function applyChooseRoute(
   state: GameState,
@@ -120,7 +136,7 @@ export function applyChooseRoute(
     };
   }
 
-  // Resolve navigation uncertainty
+  // ── Resolve navigation uncertainty ──────────────────────────────────────────
   let r = rng;
   const events: DomainEvent[] = [];
   let totalDistance = edge.distance;
@@ -129,10 +145,12 @@ export function applyChooseRoute(
     let roll: number;
     [r, roll] = nextFloat(r);
     if (roll < edge.uncertaintyWeight) {
-      // Got lost: add 20-50% extra distance
       let extraRoll: number;
       [r, extraRoll] = nextFloat(r);
-      const extraDistance = Math.max(1, Math.round(edge.distance * (0.2 + extraRoll * 0.3)));
+      const extraDistance = Math.max(
+        1,
+        Math.round(edge.distance * (0.2 + extraRoll * 0.3)),
+      );
       totalDistance += extraDistance;
       events.push({
         type: "NAVIGATION_UNCERTAINTY",
@@ -142,7 +160,63 @@ export function applyChooseRoute(
     }
   }
 
-  // Apply transport wear
+  // ── Advance one TRAVEL turn (time, upkeep, farm clock) ──────────────────────
+  const phaseAtStart = state.world.phase;
+  const hoursThisTurn = ACTION_TURN_HOURS["TRAVEL"];
+  const newElapsedHours = state.world.elapsedHours + hoursThisTurn;
+  const newDay = Math.floor(newElapsedHours / 24) + 1;
+  const newPhase = hoursToPhase(newElapsedHours);
+
+  // Meter upkeep (TRAVEL category)
+  const upkeep = computeUpkeep("TRAVEL");
+  const m = state.party.player.meters;
+  const newHunger = clamp(m.hunger + upkeep.hunger, 0, 100);
+  const newThirst = clamp(m.thirst + upkeep.thirst, 0, 100);
+  const newFatigue = clamp(m.fatigue + upkeep.fatigue, 0, 100);
+  const newSleepDebt = clamp(m.sleepDebt + upkeep.sleepDebt, 0, 100);
+
+  // Farm clock tick
+  const newFarmClockTurns = tickFarmClock(state.farm.clockTurns);
+
+  // Build resolution changes
+  const changes: ResolutionChange[] = [];
+  if (newHunger !== m.hunger)
+    changes.push({
+      field: "hunger",
+      before: m.hunger,
+      after: newHunger,
+      delta: newHunger - m.hunger,
+    });
+  if (newThirst !== m.thirst)
+    changes.push({
+      field: "thirst",
+      before: m.thirst,
+      after: newThirst,
+      delta: newThirst - m.thirst,
+    });
+  if (newFatigue !== m.fatigue)
+    changes.push({
+      field: "fatigue",
+      before: m.fatigue,
+      after: newFatigue,
+      delta: newFatigue - m.fatigue,
+    });
+  if (newSleepDebt !== m.sleepDebt)
+    changes.push({
+      field: "sleepDebt",
+      before: m.sleepDebt,
+      after: newSleepDebt,
+      delta: newSleepDebt - m.sleepDebt,
+    });
+  if (newFarmClockTurns !== state.farm.clockTurns)
+    changes.push({
+      field: "farm.clockTurns",
+      before: state.farm.clockTurns,
+      after: newFarmClockTurns,
+      delta: newFarmClockTurns - state.farm.clockTurns,
+    });
+
+  // ── Apply transport wear ────────────────────────────────────────────────────
   let nextTransports = state.transports;
   if (state.party.activeTransportId && edge.wearPerTraversal > 0) {
     nextTransports = state.transports.map((t) => {
@@ -154,11 +228,10 @@ export function applyChooseRoute(
     });
   }
 
-  // Determine destination node
+  // ── Location update ─────────────────────────────────────────────────────────
   const destNode = getNode(graph, edge.toNodeId);
   const newTerrain = destNode?.terrain ?? edge.terrain;
 
-  // Chapter transition
   let newChapter = state.location.chapter as string;
   if (edge.transitionsToChapter) {
     const oldChapter = state.location.chapter;
@@ -171,35 +244,93 @@ export function applyChooseRoute(
     });
   }
 
-  // Update location
   const newVisited = state.location.visitedNodeIds.includes(edge.toNodeId)
     ? state.location.visitedNodeIds
     : [...state.location.visitedNodeIds, edge.toNodeId];
 
-  events.unshift({
-    type: "ROUTE_CHOSEN",
-    edgeId: edge.id,
-    fromNodeId: edge.fromNodeId,
-    toNodeId: edge.toNodeId,
-    distance: totalDistance,
-  });
+  const newDistanceRemaining = Math.max(
+    0,
+    state.location.distanceRemaining - totalDistance,
+  );
 
-  const nextState: GameState = {
+  // ── Build next state ────────────────────────────────────────────────────────
+  let nextState: GameState = {
     ...state,
+    party: {
+      ...state.party,
+      player: {
+        ...state.party.player,
+        meters: {
+          ...m,
+          hunger: newHunger,
+          thirst: newThirst,
+          fatigue: newFatigue,
+          sleepDebt: newSleepDebt,
+        },
+      },
+    },
     location: {
       ...state.location,
       currentNodeId: edge.toNodeId,
       lastEdgeId: edge.id,
       chapter: newChapter as Chapter,
       terrain: newTerrain,
-      distanceRemaining: Math.max(
-        0,
-        state.location.distanceRemaining - totalDistance,
-      ),
+      distanceRemaining: newDistanceRemaining,
       visitedNodeIds: newVisited as NodeId[],
+    },
+    world: {
+      ...state.world,
+      elapsedHours: newElapsedHours,
+      day: newDay,
+      phase: newPhase,
+    },
+    farm: {
+      ...state.farm,
+      clockTurns: newFarmClockTurns,
     },
     transports: nextTransports,
   };
 
-  return { state: nextState, rng: r, events };
+  // ── Spoilage ────────────────────────────────────────────────────────────────
+  const spoilageResult = advanceSpoilage(nextState.inventory);
+  nextState = { ...nextState, inventory: spoilageResult.inventory };
+  for (const spoiled of spoilageResult.spoiledItems) {
+    events.push({
+      type: "ITEM_SPOILED",
+      instanceId: spoiled.instanceId,
+      definitionId: spoiled.definitionId,
+    });
+  }
+
+  // ── Emit domain events in order ─────────────────────────────────────────────
+  const orderedEvents: DomainEvent[] = [
+    {
+      type: "ROUTE_CHOSEN",
+      edgeId: edge.id,
+      fromNodeId: edge.fromNodeId,
+      toNodeId: edge.toNodeId,
+      distance: totalDistance,
+    },
+    { type: "TIME_ADVANCED", hours: hoursThisTurn, newElapsedHours },
+    {
+      type: "TRAVEL_ADVANCED",
+      distanceCovered: totalDistance,
+      newDistanceRemaining,
+    },
+    {
+      type: "FARM_CLOCK_TICKED",
+      newClockTurns: newFarmClockTurns,
+      deadlineTurns: state.farm.deadlineTurns,
+    },
+    {
+      type: "TURN_RESOLVED",
+      action: "TRAVEL",
+      phase: phaseAtStart,
+      hoursElapsed: hoursThisTurn,
+      changes,
+    },
+    ...events,
+  ];
+
+  return { state: nextState, rng: r, events: orderedEvents };
 }

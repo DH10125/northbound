@@ -25,7 +25,6 @@ export const ChooseRouteCommandSchema = z
   })
   .strict();
 
-
 /**
  * Advance the party along the route by one travel segment.
  * `turnsToTravel` defaults to 1 if omitted; must be 1–8.

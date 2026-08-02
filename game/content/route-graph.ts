@@ -269,8 +269,7 @@ export const pensacolaGraph: RouteGraph = {
       terrain: "coast",
       required: false,
       riskLevel: "high",
-      riskDescription:
-        "Exposed waterfront, armed boat owners, unstable docks.",
+      riskDescription: "Exposed waterfront, armed boat owners, unstable docks.",
       chapterStart: false,
       canRest: false,
       canScavenge: true,
@@ -549,8 +548,7 @@ export const pensacolaGraph: RouteGraph = {
       terrain: "swamp",
       allowedModes: ["foot", "canoe"],
       riskLevel: "moderate",
-      riskDescription:
-        "Long slog through wetlands, risk of getting lost.",
+      riskDescription: "Long slog through wetlands, risk of getting lost.",
       label: "Follow the bayou north to the bridge (long, hidden)",
       transitionsToChapter: null,
       uncertaintyWeight: 0.4,
