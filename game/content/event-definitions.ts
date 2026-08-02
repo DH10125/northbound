@@ -336,9 +336,7 @@ export function validateEventRegistry(events: ReadonlyArray<EventDefinition>): {
   for (const event of events) {
     for (const option of event.options) {
       for (const outcome of option.outcomes) {
-        const followUps = outcome.effects.filter(
-          (e) => e.type === "follow-up",
-        );
+        const followUps = outcome.effects.filter((e) => e.type === "follow-up");
         if (followUps.length > 1) {
           errors.push(
             `Event "${event.id}" option "${option.id}" has multiple follow-up effects in one outcome`,

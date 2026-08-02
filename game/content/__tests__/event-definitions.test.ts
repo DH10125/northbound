@@ -143,7 +143,9 @@ describe("ConditionLeafSchema field-specific validation", () => {
 
 // ── Follow-up validation ─────────────────────────────────────────────────────
 
-function makeEvent(overrides: Partial<EventDefinition> & { id: string }): EventDefinition {
+function makeEvent(
+  overrides: Partial<EventDefinition> & { id: string },
+): EventDefinition {
   const { id, ...rest } = overrides;
   return {
     id,
@@ -151,12 +153,20 @@ function makeEvent(overrides: Partial<EventDefinition> & { id: string }): EventD
     title: "Test",
     text: "Test text",
     tags: [],
-    trigger: { field: "chapter", op: "eq", value: "test" } as any,
+    trigger: { field: "chapter", op: "eq" as const, value: "test" },
     weight: 1,
     once: false,
     options: [
-      { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
-      { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+      {
+        id: "a",
+        label: "A",
+        outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+      },
+      {
+        id: "b",
+        label: "B",
+        outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+      },
     ],
     ...rest,
   };
@@ -168,14 +178,30 @@ describe("validateEventRegistry follow-up safety", () => {
       makeEvent({
         id: "event.self",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.self" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.self" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
     ];
     const result = validateEventRegistry(events);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes("self-referencing"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("self-referencing"))).toBe(
+      true,
+    );
   });
 
   it("rejects cyclic follow-up chain (A→B→A)", () => {
@@ -183,15 +209,43 @@ describe("validateEventRegistry follow-up safety", () => {
       makeEvent({
         id: "event.a",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.b" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.b" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
       makeEvent({
         id: "event.b",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.a" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.a" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
     ];
@@ -208,16 +262,22 @@ describe("validateEventRegistry follow-up safety", () => {
           {
             id: "a",
             label: "A",
-            outcomes: [{
-              weight: 1,
-              text: "Ok",
-              effects: [
-                { type: "follow-up", eventId: "event.x" },
-                { type: "follow-up", eventId: "event.y" },
-              ],
-            }],
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [
+                  { type: "follow-up", eventId: "event.x" },
+                  { type: "follow-up", eventId: "event.y" },
+                ],
+              },
+            ],
           },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
       makeEvent({ id: "event.x" }),
@@ -225,7 +285,9 @@ describe("validateEventRegistry follow-up safety", () => {
     ];
     const result = validateEventRegistry(events);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes("multiple follow-up"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("multiple follow-up"))).toBe(
+      true,
+    );
   });
 
   it("rejects unknown follow-up target", () => {
@@ -233,14 +295,30 @@ describe("validateEventRegistry follow-up safety", () => {
       makeEvent({
         id: "event.a",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.missing" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.missing" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
     ];
     const result = validateEventRegistry(events);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes("unknown follow-up"))).toBe(true);
+    expect(result.errors.some((e) => e.includes("unknown follow-up"))).toBe(
+      true,
+    );
   });
 
   it("accepts valid linear follow-up chain (A→B→C)", () => {
@@ -248,15 +326,43 @@ describe("validateEventRegistry follow-up safety", () => {
       makeEvent({
         id: "event.a",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.b" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.b" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
       makeEvent({
         id: "event.b",
         options: [
-          { id: "a", label: "A", outcomes: [{ weight: 1, text: "Ok", effects: [{ type: "follow-up", eventId: "event.c" }] }] },
-          { id: "b", label: "B", outcomes: [{ weight: 1, text: "Ok", effects: [] }] },
+          {
+            id: "a",
+            label: "A",
+            outcomes: [
+              {
+                weight: 1,
+                text: "Ok",
+                effects: [{ type: "follow-up", eventId: "event.c" }],
+              },
+            ],
+          },
+          {
+            id: "b",
+            label: "B",
+            outcomes: [{ weight: 1, text: "Ok", effects: [] }],
+          },
         ],
       }),
       makeEvent({ id: "event.c" }),
