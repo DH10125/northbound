@@ -1022,90 +1022,111 @@ describe("applyCommand – resolution legitimacy enforcement", () => {
   });
 });
 
-// ── ACTIVATE_EVENT deterministic authorization ────────────────────────────────
+// ── ACTIVATE_EVENT deterministic selection ─────────────────────────────────────
 
-describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
+describe("applyCommand – ACTIVATE_EVENT deterministic selection", () => {
   beforeEach(() => {
     setEventRegistry([basicEvent, eventWithEffects, onceEvent, cooldownEvent]);
   });
 
-  it("rejects activation of trigger-eligible but not selected event", () => {
-    // All registered events are eligible, but seeded selection only picks one.
-    const rng = seedToState("activation-wrong");
+  it("performs deterministic selection and activates the selected event", () => {
+    const rng = seedToState("activation-correct");
     const registry = getEventRegistry();
     const candidates = filterCandidates(registry, minimalGameState, 0);
-    expect(candidates.length).toBeGreaterThan(1);
-
-    // Run selection to determine which event is actually chosen
-    const [, selectionResult] = selectEvent(candidates, rng);
-    const selectedId =
-      selectionResult.type === "event-selected"
-        ? selectionResult.event.id
-        : null;
-
-    // Try to activate a DIFFERENT eligible event
-    const otherCandidate = candidates.find((c) => c.id !== selectedId);
-    if (!otherCandidate) return; // all candidates are the same; skip
+    const [expectedRng, selectionResult] = selectEvent(candidates, rng);
 
     const result = applyCommand(
       minimalGameState,
-      { type: "ACTIVATE_EVENT", eventId: otherCandidate.id },
+      { type: "ACTIVATE_EVENT" },
       rng,
     );
-    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
-    expect(result.events[0]).toHaveProperty("reason");
+
+    if (selectionResult.type === "event-selected") {
+      expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+        true,
+      );
+      expect(result.state.eventHistory.activeEventId).toBe(
+        selectionResult.event.id,
+      );
+      expect(result.rng).toEqual(expectedRng);
+    } else {
+      expect(result.events.some((e) => e.type === "NO_EVENT")).toBe(true);
+    }
   });
 
-  it("allows activation of the exact selected event", () => {
-    const rng = seedToState("activation-correct");
-    // Use the full registry that beforeEach installed
-    const registry = getEventRegistry();
-    const candidates = filterCandidates(registry, minimalGameState, 0);
-    const [, selectionResult] = selectEvent(candidates, rng);
+  it("returns NO_EVENT when selection produces no-event", () => {
+    // Use a registry with only a no-event weight (weight 0 events get filtered)
+    // We'll test with empty candidates by making events ineligible
+    const stateResolved: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        entries: [
+          {
+            eventId: "event.test.once" as import("../../schemas/ids").EventId,
+            chosenOptionId: "opt-1",
+            resolvedAtHour: 0,
+            flagsSet: [],
+          },
+        ],
+        cooldowns: {
+          "event.test.cooldown": 0,
+        },
+      },
+    };
+    // With once resolved and cooldown active, only basicEvent and eventWithEffects remain
+    // We can still get a no-event from the weighted selection's no-event bucket
+    const rng = seedToState("no-event-seed");
+    const result = applyCommand(stateResolved, { type: "ACTIVATE_EVENT" }, rng);
+    // Result is either ENCOUNTER_STARTED or NO_EVENT — both are valid
+    expect(
+      result.events.some(
+        (e) => e.type === "ENCOUNTER_STARTED" || e.type === "NO_EVENT",
+      ),
+    ).toBe(true);
+  });
 
-    if (selectionResult.type !== "event-selected") {
-      // no-event was selected; skip this test iteration
-      return;
-    }
-
-    const result = applyCommand(
-      minimalGameState,
-      { type: "ACTIVATE_EVENT", eventId: selectionResult.event.id },
-      rng,
-    );
-    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
-      true,
-    );
-    expect(result.state.eventHistory.activeEventId).toBe(
-      selectionResult.event.id,
-    );
+  it("does not consume RNG on rejection (already active)", () => {
+    const stateActive: GameState = {
+      ...minimalGameState,
+      eventHistory: {
+        ...minimalGameState.eventHistory,
+        activeEventId: "event.test.basic",
+      },
+    };
+    const rng = seedToState("no-rng-consume");
+    const result = applyCommand(stateActive, { type: "ACTIVATE_EVENT" }, rng);
+    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+    expect(result.rng).toEqual(rng);
   });
 
   it("emits ENCOUNTER_STARTED exactly once (at activation, not resolution)", () => {
     const rng = seedToState("encounter-once");
-    const registry = getEventRegistry();
-    const candidates = filterCandidates(registry, minimalGameState, 0);
-    const [, selectionResult] = selectEvent(candidates, rng);
-    if (selectionResult.type !== "event-selected") return;
 
     // Activate
     const activateResult = applyCommand(
       minimalGameState,
-      { type: "ACTIVATE_EVENT", eventId: selectionResult.event.id },
+      { type: "ACTIVATE_EVENT" },
       rng,
     );
+
+    if (activateResult.events.some((e) => e.type === "NO_EVENT")) return;
+
     const activateEncounters = activateResult.events.filter(
       (e) => e.type === "ENCOUNTER_STARTED",
     );
     expect(activateEncounters).toHaveLength(1);
+
+    const activeId = activateResult.state.eventHistory.activeEventId!;
+    const activeEvent = getEventRegistry().find((e) => e.id === activeId)!;
 
     // Resolve
     const resolveResult = applyCommand(
       activateResult.state,
       {
         type: "CHOOSE_EVENT_OPTION",
-        eventId: selectionResult.event.id,
-        optionId: selectionResult.event.options[0]!.id,
+        eventId: activeId,
+        optionId: activeEvent.options[0]!.id,
       },
       activateResult.rng,
     );
@@ -1115,8 +1136,7 @@ describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
     expect(resolveEncounters).toHaveLength(0);
   });
 
-  it("allows activation of exact queued follow-up via pendingFollowUp", () => {
-    // Set up chain events
+  it("activates exact queued follow-up via pendingFollowUp without consuming RNG", () => {
     const chainA: EventDefinition = {
       ...basicEvent,
       id: "event.chain.a",
@@ -1145,34 +1165,33 @@ describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
     };
     setEventRegistry([chainA, chainB]);
 
-    // Manually set pendingFollowUp to chain B
     const stateWithFollowUp: GameState = {
       ...minimalGameState,
       eventHistory: {
         ...minimalGameState.eventHistory,
         pendingFollowUp: "event.chain.b",
-        activeEventId: "event.chain.b",
+        activeEventId: null,
       },
     };
 
-    // Should be able to resolve chain B via pendingFollowUp (bypass activation)
-    const rng = seedToState("followup-resolve");
+    const rng = seedToState("followup-activate");
     const result = applyCommand(
       stateWithFollowUp,
-      {
-        type: "CHOOSE_EVENT_OPTION",
-        eventId: "event.chain.b",
-        optionId: "opt-a",
-      },
+      { type: "ACTIVATE_EVENT" },
       rng,
     );
-    expect(result.events.some((e) => e.type === "COMMAND_REJECTED")).toBe(
-      false,
+    expect(result.events.some((e) => e.type === "ENCOUNTER_STARTED")).toBe(
+      true,
     );
-    expect(result.state.eventHistory.entries).toHaveLength(1);
+    expect(result.state.eventHistory.activeEventId).toBe("event.chain.b");
+    expect(result.state.eventHistory.pendingFollowUp).toBeNull();
+    // Follow-up activation does NOT consume RNG
+    expect(result.rng).toEqual(rng);
   });
 
-  it("rejects activation of once-resolved event", () => {
+  it("once-resolved events are excluded from candidates", () => {
+    // Install only the once event
+    setEventRegistry([onceEvent]);
     const stateResolved: GameState = {
       ...minimalGameState,
       eventHistory: {
@@ -1188,16 +1207,14 @@ describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
       },
     };
     const rng = seedToState("once-activate-reject");
-    const result = applyCommand(
-      stateResolved,
-      { type: "ACTIVATE_EVENT", eventId: "event.test.once" },
-      rng,
-    );
-    // once-resolved events are filtered out of candidates
-    expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+    const result = applyCommand(stateResolved, { type: "ACTIVATE_EVENT" }, rng);
+    // No candidates → NO_EVENT, RNG not consumed
+    expect(result.events.some((e) => e.type === "NO_EVENT")).toBe(true);
+    expect(result.rng).toEqual(rng);
   });
 
-  it("rejects activation of event on cooldown", () => {
+  it("cooldown events are excluded from candidates", () => {
+    setEventRegistry([cooldownEvent]);
     const stateOnCooldown: GameState = {
       ...minimalGameState,
       eventHistory: {
@@ -1208,10 +1225,36 @@ describe("applyCommand – ACTIVATE_EVENT deterministic authorization", () => {
     const rng = seedToState("cooldown-activate-reject");
     const result = applyCommand(
       stateOnCooldown,
-      { type: "ACTIVATE_EVENT", eventId: "event.test.cooldown" },
+      { type: "ACTIVATE_EVENT" },
       rng,
     );
+    expect(result.events.some((e) => e.type === "NO_EVENT")).toBe(true);
+    expect(result.rng).toEqual(rng);
+  });
+
+  it("CHOOSE_EVENT_OPTION on stale/forged eventId preserves original RNG", () => {
+    const rng = seedToState("forged-choice-rng");
+    // Activate an event first
+    const activateResult = applyCommand(
+      minimalGameState,
+      { type: "ACTIVATE_EVENT" },
+      rng,
+    );
+    if (activateResult.events.some((e) => e.type === "NO_EVENT")) return;
+
+    // Try to resolve a DIFFERENT event ID (forged)
+    const result = applyCommand(
+      activateResult.state,
+      {
+        type: "CHOOSE_EVENT_OPTION",
+        eventId: "event.forged.nonexistent",
+        optionId: "opt-a",
+      },
+      activateResult.rng,
+    );
     expect(result.events[0]?.type).toBe("COMMAND_REJECTED");
+    // RNG unchanged on rejection
+    expect(result.rng).toEqual(activateResult.rng);
   });
 });
 

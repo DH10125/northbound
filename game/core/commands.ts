@@ -115,7 +115,6 @@ export const ConsumeItemCommandSchema = z
 export const ActivateEventCommandSchema = z
   .object({
     type: z.literal("ACTIVATE_EVENT"),
-    eventId: z.string().min(1),
   })
   .strict();
 

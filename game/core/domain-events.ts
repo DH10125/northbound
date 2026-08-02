@@ -42,6 +42,10 @@ export const EncounterStartedEventSchema = z.object({
   eventId: z.string().min(1),
 });
 
+export const NoEventEventSchema = z.object({
+  type: z.literal("NO_EVENT"),
+});
+
 export const MeterChangedEventSchema = z.object({
   type: z.literal("METER_CHANGED"),
   /** "player" or a companion id string. */
@@ -132,6 +136,7 @@ export const DomainEventSchema = z.discriminatedUnion("type", [
   ItemConsumedEventSchema,
   ConditionProgressEventSchema,
   EncounterStartedEventSchema,
+  NoEventEventSchema,
   MeterChangedEventSchema,
   TravelAdvancedEventSchema,
   CommandRejectedEventSchema,

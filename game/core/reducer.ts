@@ -886,11 +886,7 @@ function applyConsumeItem(
 
 // ── Activate event ────────────────────────────────────────────────────────────
 
-function applyActivateEvent(
-  state: GameState,
-  rng: RngState,
-  eventId: string,
-): ReducerResult {
+function applyActivateEvent(state: GameState, rng: RngState): ReducerResult {
   if (state.runStatus !== "active") {
     return {
       state,
@@ -899,89 +895,74 @@ function applyActivateEvent(
     };
   }
 
-  // Cannot activate if a follow-up is pending
+  // If a follow-up is pending, activate it directly (deterministic chain)
   if (state.eventHistory.pendingFollowUp !== null) {
+    const followUpId = state.eventHistory.pendingFollowUp;
+    const nextState: GameState = {
+      ...state,
+      eventHistory: {
+        ...state.eventHistory,
+        activeEventId: followUpId,
+        pendingFollowUp: null,
+      },
+    };
+    return {
+      state: nextState,
+      rng,
+      events: [{ type: "ENCOUNTER_STARTED", eventId: followUpId }],
+    };
+  }
+
+  // Already have an active event — reject without consuming RNG
+  if (state.eventHistory.activeEventId !== null) {
     return {
       state,
       rng,
       events: [
         {
           type: "COMMAND_REJECTED",
-          reason: `Cannot activate event while follow-up "${state.eventHistory.pendingFollowUp}" is pending.`,
+          reason: `Event "${state.eventHistory.activeEventId}" is already active.`,
         },
       ],
     };
   }
 
-  // Verify event exists in registry
-  const event = eventRegistry.find((e) => e.id === eventId);
-  if (!event) {
-    return {
-      state,
-      rng,
-      events: [
-        {
-          type: "COMMAND_REJECTED",
-          reason: `Event "${eventId}" not found in registry.`,
-        },
-      ],
-    };
-  }
-
-  // Run deterministic candidate filtering and selection — the requested
-  // eventId must be the exact event that the seeded selection flow would
-  // produce.  This prevents a forged ACTIVATE_EVENT from bypassing the
-  // filter/select pipeline.
+  // Perform deterministic candidate filtering and weighted selection
   const currentTurn = Math.floor(state.world.elapsedHours / 4);
   const candidates = filterCandidates(eventRegistry, state, currentTurn);
 
-  if (!candidates.some((c) => c.id === eventId)) {
+  if (candidates.length === 0) {
     return {
       state,
       rng,
-      events: [
-        {
-          type: "COMMAND_REJECTED",
-          reason: `Event "${eventId}" is not an eligible candidate.`,
-        },
-      ],
+      events: [{ type: "NO_EVENT" }],
     };
   }
 
   const [nextRng, selectionResult] = selectEvent(candidates, rng);
 
-  if (
-    selectionResult.type !== "event-selected" ||
-    selectionResult.event.id !== eventId
-  ) {
-    // The seeded selection chose a different event (or no-event).
-    // Reject without setting activeEventId, but DO consume RNG so the
-    // selection is deterministic and non-replayable with a different ID.
+  if (selectionResult.type === "no-event") {
     return {
       state,
       rng: nextRng,
-      events: [
-        {
-          type: "COMMAND_REJECTED",
-          reason: `Event "${eventId}" was not selected by the seeded selection.`,
-        },
-      ],
+      events: [{ type: "NO_EVENT" }],
     };
   }
 
-  // Set the activeEventId
+  // Set the activeEventId to the deterministically selected event
+  const selectedId = selectionResult.event.id;
   const nextState: GameState = {
     ...state,
     eventHistory: {
       ...state.eventHistory,
-      activeEventId: eventId,
+      activeEventId: selectedId,
     },
   };
 
   return {
     state: nextState,
     rng: nextRng,
-    events: [{ type: "ENCOUNTER_STARTED", eventId }],
+    events: [{ type: "ENCOUNTER_STARTED", eventId: selectedId }],
   };
 }
 
@@ -1046,7 +1027,7 @@ export function applyCommand(
       break;
 
     case "ACTIVATE_EVENT":
-      result = applyActivateEvent(state, rng, command.eventId);
+      result = applyActivateEvent(state, rng);
       break;
   }
 
