@@ -29,6 +29,8 @@ import { transferItem, consumeItem, advanceSpoilage } from "./inventory";
 import type { StorageLocation } from "./inventory-types";
 import type { ItemInstanceId } from "../schemas/ids";
 import { applyChooseRoute } from "./route-resolution";
+import { resolveEventChoice } from "./event-engine";
+import type { EventDefinition } from "../content/event-definitions";
 
 // ── Result type ───────────────────────────────────────────────────────────────
 
@@ -539,6 +541,22 @@ function applyScavenge(state: GameState, rng: RngState): ReducerResult {
 
 // ── Choose event option ───────────────────────────────────────────────────────
 
+/** Content registry used by the event engine. Set via setEventRegistry(). */
+let eventRegistry: ReadonlyArray<EventDefinition> = [];
+
+/**
+ * Register event definitions for use by the reducer.
+ * Called once at startup with validated content.
+ */
+export function setEventRegistry(events: ReadonlyArray<EventDefinition>): void {
+  eventRegistry = events;
+}
+
+/** Get the current event registry (for testing). */
+export function getEventRegistry(): ReadonlyArray<EventDefinition> {
+  return eventRegistry;
+}
+
 function applyChooseEventOption(
   state: GameState,
   rng: RngState,
@@ -553,25 +571,36 @@ function applyChooseEventOption(
     };
   }
 
-  // Content-free stub: record the encounter in event history.
-  const entry = {
-    eventId: eventId as import("../schemas/ids").EventId,
-    chosenOptionId: optionId,
-    resolvedAtHour: state.world.elapsedHours,
-    flagsSet: [] as string[],
+  // Look up event definition
+  const event = eventRegistry.find((e) => e.id === eventId);
+  if (!event) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: `Event "${eventId}" not found in registry.` }],
+    };
+  }
+
+  // Prevent duplicate resolution
+  const alreadyResolved = state.eventHistory.entries.some(
+    (e) => e.eventId === eventId && e.resolvedAtHour === state.world.elapsedHours,
+  );
+  if (alreadyResolved) {
+    return {
+      state,
+      rng,
+      events: [{ type: "COMMAND_REJECTED", reason: `Event "${eventId}" already resolved this turn.` }],
+    };
+  }
+
+  const currentTurn = Math.floor(state.world.elapsedHours / 4); // approximate turn number
+  const result = resolveEventChoice(event, optionId, state, rng, currentTurn);
+
+  return {
+    state: result.state,
+    rng: result.rng,
+    events: result.events,
   };
-
-  const nextState: GameState = {
-    ...state,
-    eventHistory: {
-      ...state.eventHistory,
-      entries: [...state.eventHistory.entries, entry],
-    },
-  };
-
-  const events: DomainEvent[] = [{ type: "ENCOUNTER_STARTED", eventId }];
-
-  return { state: nextState, rng, events };
 }
 
 // ── Transfer item ────────────────────────────────────────────────────────────
