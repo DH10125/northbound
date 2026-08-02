@@ -207,11 +207,57 @@ test.describe("Pensacola tutorial E2E", () => {
       if (!raw) throw new Error("No save found in sessionStorage");
       const envelope = JSON.parse(raw);
       envelope.state.party.player.meters.fatigue = 75;
-      // Ensure the flag is not already set
+
+      // Mark ALL other Pensacola events as already resolved so they won't
+      // compete with the exhaustion-check event during weighted selection.
+      // The exhaustion-check event (event.pensacola.exhaustion-check) requires
+      // fatigue >= 70, chapter=pensacola-escape, and not-has exhaustion-warned.
+      const allPensacolaEventIds = [
+        "event.pensacola.tutorial-wake-up",
+        "event.pensacola.tutorial-tip-movement",
+        "event.pensacola.tutorial-tip-supplies",
+        "event.pensacola.tutorial-tip-stealth",
+        "event.pensacola.family-signal",
+        "event.pensacola.abandoned-bicycle",
+        "event.pensacola.scavenge-pharmacy",
+        "event.pensacola.water-source",
+        "event.pensacola.route-highway",
+        "event.pensacola.route-bayou",
+        "event.pensacola.route-industrial",
+        "event.pensacola.stranger-encounter",
+        // "event.pensacola.exhaustion-check" — NOT this one
+        "event.pensacola.hunger-pangs",
+        "event.pensacola.nightfall-decision",
+        "event.pensacola.injury-stumble",
+        "event.pensacola.caught-by-patrol",
+        "event.pensacola.dehydration-crisis",
+        "event.pensacola.lost-in-dark",
+        "event.pensacola.bridge-approach",
+        "event.pensacola.chapter-end",
+        "event.pensacola.stray-dog",
+        "event.pensacola.quiet-moment",
+      ];
+      envelope.state.eventHistory.entries = allPensacolaEventIds.map(
+        (eventId: string) => ({
+          eventId,
+          chosenOptionId: "dummy",
+          resolvedAtHour: 0,
+          flagsSet: [],
+        }),
+      );
+
+      // Ensure exhaustion-warned flag is NOT set (so exhaustion-check is eligible)
+      // but add tutorial-started since some trigger guards check it
       envelope.state.eventHistory.activeFlags =
         envelope.state.eventHistory.activeFlags.filter(
           (f: string) => f !== "exhaustion-warned",
         );
+      if (
+        !envelope.state.eventHistory.activeFlags.includes("tutorial-started")
+      ) {
+        envelope.state.eventHistory.activeFlags.push("tutorial-started");
+      }
+
       sessionStorage.setItem(key, JSON.stringify(envelope));
     }, SAVE_KEY);
 
@@ -230,14 +276,24 @@ test.describe("Pensacola tutorial E2E", () => {
     });
     expect(fatigueBefore).toBe(75);
 
-    // Click "Look around" to trigger the exhaustion-check event
+    // Click "Look around" to trigger the exhaustion-check event.
+    // The weighted selection may pick "no-event" (weight 20 vs exhaustion 60),
+    // so click up to 5 times — this is normal gameplay, not a test retry.
     const eventBtn = page.getByRole("button", { name: /look around/i });
     await expect(eventBtn).toBeVisible({ timeout: 5000 });
-    await eventBtn.click();
 
-    // The exhaustion event panel should appear with title "Hitting the Wall"
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await eventBtn.click();
+      const hittingWall = page.getByText("Hitting the Wall");
+      if (await hittingWall.isVisible({ timeout: 1000 }).catch(() => false)) {
+        break;
+      }
+      // "Nothing eventful happens" — try again (event is still eligible)
+    }
+
+    // The exhaustion event panel MUST appear with title "Hitting the Wall"
     await expect(page.getByText("Hitting the Wall")).toBeVisible({
-      timeout: 5000,
+      timeout: 2000,
     });
 
     // Select the recovery option: "Find a sheltered spot and rest"
