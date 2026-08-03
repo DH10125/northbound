@@ -1,0 +1,610 @@
+/* ── Play page styles ─────────────────────────────────────────────────── */
+
+/* Scene banner — CSS-only atmospheric illustrations per event tag */
+.scene-banner {
+  position: relative;
+  width: 100%;
+  height: 10rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.scene-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--surface-base), transparent 60%);
+  pointer-events: none;
+}
+
+/* Default: dark city skyline */
+.scene-banner--default {
+  background:
+    linear-gradient(
+      to bottom,
+      var(--color-slate-900) 0%,
+      var(--color-slate-800) 40%,
+      var(--color-slate-700) 60%,
+      var(--color-slate-800) 80%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Opening / tutorial scenes: dark hotel, emergency lighting */
+.scene-banner--opening {
+  background:
+    radial-gradient(ellipse at 20% 80%, var(--color-ember-700) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 60%, var(--color-ember-600) 0%, transparent 30%),
+    linear-gradient(
+      to bottom,
+      #0a0e14 0%,
+      var(--color-slate-900) 50%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Route / travel: road stretching north */
+.scene-banner--route {
+  background:
+    linear-gradient(
+      175deg,
+      var(--color-slate-800) 0%,
+      var(--color-slate-700) 30%,
+      var(--color-slate-600) 50%,
+      var(--color-safe-600) 70%,
+      var(--color-safe-500) 100%
+    );
+}
+
+/* Stealth: dark with sweep of light */
+.scene-banner--stealth {
+  background:
+    radial-gradient(ellipse at 70% 30%, rgba(255,255,255,0.08) 0%, transparent 50%),
+    linear-gradient(
+      to bottom,
+      #050810 0%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Supply / scavenging: interior warm tones */
+.scene-banner--supply {
+  background:
+    radial-gradient(ellipse at 50% 70%, var(--color-ember-700) 0%, transparent 60%),
+    linear-gradient(
+      to bottom,
+      var(--color-slate-800) 0%,
+      var(--color-slate-900) 100%
+    );
+}
+
+/* Story / family: warm hopeful glow */
+.scene-banner--story {
+  background:
+    radial-gradient(ellipse at 50% 60%, var(--color-river-700) 0%, transparent 50%),
+    radial-gradient(ellipse at 30% 80%, var(--color-ember-700) 0%, transparent 40%),
+    linear-gradient(
+      to bottom,
+      var(--color-slate-900) 0%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Health / danger: red-tinged */
+.scene-banner--health {
+  background:
+    radial-gradient(ellipse at 50% 50%, var(--color-danger-600) 0%, transparent 50%),
+    linear-gradient(
+      to bottom,
+      var(--color-slate-900) 0%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Flavor / quiet: starry night sky */
+.scene-banner--flavor {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,0.15) 0%, transparent 2%),
+    radial-gradient(circle at 60% 15%, rgba(255,255,255,0.12) 0%, transparent 1.5%),
+    radial-gradient(circle at 40% 40%, rgba(255,255,255,0.10) 0%, transparent 1%),
+    radial-gradient(circle at 80% 35%, rgba(255,255,255,0.12) 0%, transparent 1.5%),
+    radial-gradient(circle at 15% 60%, rgba(255,255,255,0.08) 0%, transparent 1%),
+    radial-gradient(circle at 55% 70%, rgba(255,255,255,0.10) 0%, transparent 1%),
+    radial-gradient(circle at 90% 80%, rgba(255,255,255,0.06) 0%, transparent 1%),
+    linear-gradient(
+      to bottom,
+      #060a12 0%,
+      #0a1020 50%,
+      var(--color-slate-950) 100%
+    );
+}
+
+/* Scene banner title overlay */
+.scene-banner__title {
+  position: absolute;
+  bottom: var(--space-4);
+  left: var(--space-4);
+  right: var(--space-4);
+  z-index: 1;
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+}
+
+/* ── Location card ────────────────────────────────────────────────────── */
+.location-card {
+  position: relative;
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+  box-shadow: var(--shadow-md);
+}
+
+.location-card__name {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.location-card__description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.location-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--surface-border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* ── Meter bars ───────────────────────────────────────────────────────── */
+.meter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+@media (min-width: 640px) {
+  .meter-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.meter-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+}
+
+.meter-item__label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider);
+}
+
+.meter-item__bar-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-inset);
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+}
+
+.meter-item__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--duration-normal) var(--easing-standard);
+}
+
+/* Meter colors based on value thresholds — determined via inline style */
+.meter-item__bar-fill--ok {
+  background: var(--color-safe-400);
+}
+
+.meter-item__bar-fill--warn {
+  background: var(--color-ember-400);
+}
+
+.meter-item__bar-fill--danger {
+  background: var(--color-danger-400);
+}
+
+/* "Inverse" meters where higher = worse (hunger, thirst, fatigue, stress) */
+.meter-item__bar-fill--inverse-ok {
+  background: var(--color-safe-400);
+}
+
+.meter-item__bar-fill--inverse-warn {
+  background: var(--color-ember-400);
+}
+
+.meter-item__bar-fill--inverse-danger {
+  background: var(--color-danger-400);
+}
+
+.meter-item__value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+/* ── Action buttons ───────────────────────────────────────────────────── */
+.action-section {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-section__heading {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.action-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  border: 1px solid var(--surface-border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+.action-button:hover {
+  background: var(--surface-overlay);
+  border-color: var(--color-river-600);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-button:active {
+  background: var(--surface-inset);
+  box-shadow: none;
+}
+
+.action-button--event {
+  border-left: 3px solid var(--color-ember-500);
+}
+
+.action-button--event:hover {
+  border-left-color: var(--color-ember-400);
+}
+
+.action-button__label {
+  font-weight: var(--font-medium);
+}
+
+.action-button__meta {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.route-heading {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Event panel styles ───────────────────────────────────────────────── */
+.event-panel {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+  box-shadow: var(--shadow-lg);
+}
+
+.event-panel h2 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.event-text {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-5);
+}
+
+.event-options {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.event-option-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.event-option-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  border: 1px solid var(--surface-border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition:
+    background var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+.event-option-button:hover:not(:disabled) {
+  background: var(--surface-overlay);
+  border-color: var(--color-river-500);
+  box-shadow: var(--shadow-sm);
+}
+
+.event-option-button:active:not(:disabled) {
+  background: var(--surface-inset);
+}
+
+.event-option-unavailable {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.event-option-label {
+  font-weight: var(--font-medium);
+}
+
+.event-option-lock {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.event-option-reason {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding-left: var(--space-4);
+  font-style: italic;
+}
+
+.event-resolution-content {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  border-left: 3px solid var(--color-river-500);
+}
+
+.event-tier {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-ember-400);
+  margin-bottom: var(--space-2);
+}
+
+.event-outcome-text {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+/* ── Resolution card (in play page) ───────────────────────────────────── */
+.resolution-card {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+  box-shadow: var(--shadow-lg);
+}
+
+.resolution-card__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.resolution-card__text {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-inset);
+  border-left: 3px solid var(--color-river-500);
+}
+
+.resolution-card__button {
+  margin-top: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  background: var(--interactive-primary);
+  color: var(--interactive-primary-text);
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--easing-standard);
+}
+
+.resolution-card__button:hover {
+  background: var(--interactive-primary-hover);
+}
+
+/* ── Chapter complete ─────────────────────────────────────────────────── */
+.chapter-complete {
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--color-river-600);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.chapter-complete__heading {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.chapter-complete__text {
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  margin-bottom: var(--space-4);
+}
+
+.chapter-complete__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--interactive-primary);
+  color: var(--interactive-primary-text);
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  transition: background var(--duration-fast) var(--easing-standard);
+}
+
+.chapter-complete__link:hover {
+  background: var(--interactive-primary-hover);
+}
+
+/* ── Journey log ──────────────────────────────────────────────────────── */
+.journey-log {
+  font-size: var(--text-sm);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border-subtle);
+  overflow: hidden;
+}
+
+.journey-log summary {
+  cursor: pointer;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+}
+
+.journey-log summary:hover {
+  background: var(--surface-inset);
+}
+
+.journey-log__list {
+  list-style: none;
+  padding: 0 var(--space-4) var(--space-4);
+  margin: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.journey-log__entry {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--surface-border-subtle);
+}
+
+.journey-log__entry:last-child {
+  border-bottom: none;
+}
+
+/* ── Page header ──────────────────────────────────────────────────────── */
+.play-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--surface-border-subtle);
+}
+
+.play-header__title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.play-header__meta {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.play-header__phase-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+}
+
+.play-header__phase-dot--night {
+  background: var(--color-river-500);
+  box-shadow: 0 0 6px var(--color-river-400);
+}
+
+.play-header__phase-dot--day {
+  background: var(--color-ember-400);
+  box-shadow: 0 0 6px var(--color-ember-300);
+}
+
+/* ── Fade-in animation ────────────────────────────────────────────────── */
+.fade-in {
+  animation: fadeIn var(--duration-slow) var(--easing-decelerate);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in {
+    animation: none;
+  }
+}
