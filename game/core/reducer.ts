@@ -808,10 +808,36 @@ function applyChooseEventOption(
     currentTurn,
   );
 
+  // Emit ENCOUNTER_RESOLVED with the actual outcome text and tier
+  const resolvedEvents: DomainEvent[] = [
+    ...result.events,
+    {
+      type: "ENCOUNTER_RESOLVED",
+      eventId,
+      optionId,
+      outcomeText: result.outcomeText,
+      tier: result.tier,
+    },
+  ];
+
+  // Check for terminal failure: health reaching 0
+  let finalState = result.state;
+  if (
+    finalState.party.player.meters.health <= 0 &&
+    finalState.runStatus === "active"
+  ) {
+    finalState = { ...finalState, runStatus: "ended-failure" };
+    resolvedEvents.push({
+      type: "RUN_ENDED",
+      reason: "health-zero",
+      newRunStatus: "ended-failure",
+    });
+  }
+
   return {
-    state: result.state,
+    state: finalState,
     rng: result.rng,
-    events: result.events,
+    events: resolvedEvents,
   };
 }
 
@@ -1240,6 +1266,27 @@ export function applyCommand(
         ],
       };
     }
+  }
+
+  // Terminal failure check: any command that reduces health to 0 ends the run
+  const wasRejected2 = result.events.some((e) => e.type === "COMMAND_REJECTED");
+  if (
+    !wasRejected2 &&
+    result.state.runStatus === "active" &&
+    result.state.party.player.meters.health <= 0
+  ) {
+    result = {
+      ...result,
+      state: { ...result.state, runStatus: "ended-failure" },
+      events: [
+        ...result.events,
+        {
+          type: "RUN_ENDED",
+          reason: "health-zero",
+          newRunStatus: "ended-failure",
+        },
+      ],
+    };
   }
 
   return result;

@@ -1,59 +1,34 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CharacterCreation } from "@/components/character-creation/CharacterCreation";
 import type { CharacterDraft } from "@/game/core/character-creation";
 import { buildInitialGameState } from "@/game/core/character-creation";
 import { GameStateSchema } from "@/game/schemas/game-state";
+import { seedToState } from "@/game/core/rng";
+import { writeSave } from "@/game/core/save-helpers";
 
 export default function CreatePage() {
-  const [created, setCreated] = useState(false);
-  const [name, setName] = useState("");
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
 
-  const handleComplete = useCallback((draft: CharacterDraft) => {
-    // Build and validate the initial game state — throws if invalid.
-    const rawState = buildInitialGameState(draft);
-    const result = GameStateSchema.safeParse(rawState);
-    if (!result.success) {
-      // This should never happen; schema issues would be a bug.
-      console.error("Failed to build valid GameState", result.error);
-      return;
-    }
-    // TODO #7: persist state and navigate to game screen
-    setName(draft.name);
-    setCreated(true);
-  }, []);
-
-  if (created) {
-    return (
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="flex flex-1 flex-col items-center justify-center px-4 py-16 sm:px-6 sm:py-24"
-      >
-        <div className="w-full max-w-2xl space-y-6 text-center">
-          <h1
-            className="text-3xl font-bold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            Ready, {name}.
-          </h1>
-          <p className="text-lg" style={{ color: "var(--text-secondary)" }}>
-            The journey north begins. Gameplay is not yet available — check back
-            as development continues.
-          </p>
-          <Link
-            href="/"
-            className="inline-block text-sm underline"
-            style={{ color: "var(--text-link)" }}
-          >
-            ← Return to home
-          </Link>
-        </div>
-      </main>
-    );
-  }
+  const handleComplete = useCallback(
+    (draft: CharacterDraft) => {
+      const rawState = buildInitialGameState(draft);
+      const result = GameStateSchema.safeParse(rawState);
+      if (!result.success) {
+        setError("Failed to build valid game state. Please try again.");
+        console.error("Failed to build valid GameState", result.error);
+        return;
+      }
+      const rng = seedToState(draft.seed);
+      writeSave(sessionStorage, rawState, rng);
+      router.push("/play");
+    },
+    [router],
+  );
 
   return (
     <main
@@ -84,6 +59,14 @@ export default function CreatePage() {
             you. Who you are shapes every choice between here and home.
           </p>
         </div>
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 p-3 text-sm bg-red-900/30 text-red-300 rounded"
+          >
+            {error}
+          </div>
+        )}
         <CharacterCreation onComplete={handleComplete} />
       </div>
     </main>

@@ -228,6 +228,23 @@ export const EffectSchema = z.discriminatedUnion("type", [
     type: z.literal("follow-up"),
     eventId: z.string().min(1),
   }),
+  z.object({
+    type: z.literal("inventory-add"),
+    /** Item definition ID (e.g. "item.water.bottle-clean"). */
+    itemId: z.string().min(1),
+    quantity: z.number().int().min(1),
+  }),
+  z.object({
+    type: z.literal("transport-set"),
+    /** Transport mode to set (e.g. "bicycle"). */
+    mode: z.string().min(1),
+    /** Unique instance ID for the transport. */
+    instanceId: z.string().min(1),
+    /** Definition ID for the transport. */
+    definitionId: z.string().min(1),
+    /** Initial condition (0–100). */
+    condition: z.number().int().min(0).max(100),
+  }),
 ]);
 
 export type Effect = z.infer<typeof EffectSchema>;

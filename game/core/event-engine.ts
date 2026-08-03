@@ -26,6 +26,15 @@ import type {
   Effect,
 } from "../content/event-definitions";
 import type { Attributes, Meters } from "../schemas/meters";
+import type {
+  ItemId,
+  ItemInstanceId,
+  TransportId,
+  TransportInstanceId,
+} from "../schemas/ids";
+import type { TransportState } from "../schemas/transport";
+import { TransportModeSchema } from "../schemas/transport";
+import { getItemDefinition } from "../content/items";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -415,6 +424,29 @@ export function validateEffectBatch(
       case "time":
       case "follow-up":
         break;
+      case "inventory-add": {
+        // Validate item definition exists
+        const itemDef = getItemDefinition(effect.itemId as ItemId);
+        if (!itemDef) {
+          return `Unknown item definition "${effect.itemId}"`;
+        }
+        break;
+      }
+      case "transport-set": {
+        // Validate transport mode
+        const modeResult = TransportModeSchema.safeParse(effect.mode);
+        if (!modeResult.success) {
+          return `Invalid transport mode "${effect.mode}"`;
+        }
+        // Validate no duplicate instanceId
+        const existingTransport = state.transports.find(
+          (t) => t.instanceId === effect.instanceId,
+        );
+        if (existingTransport) {
+          return `Duplicate transport instanceId "${effect.instanceId}"`;
+        }
+        break;
+      }
     }
   }
   return undefined;
@@ -500,6 +532,59 @@ export function applyEffects(
       }
       case "follow-up": {
         followUp = effect.eventId;
+        break;
+      }
+      case "inventory-add": {
+        // Add items to the first storage (backpack)
+        const storages = s.inventory.storages.map((storage, idx) => {
+          if (idx !== 0) return storage;
+          const existing = storage.items.find(
+            (i) => i.definitionId === effect.itemId,
+          );
+          if (existing) {
+            return {
+              ...storage,
+              items: storage.items.map((i) =>
+                i.definitionId === effect.itemId
+                  ? { ...i, quantity: i.quantity + effect.quantity }
+                  : i,
+              ),
+            };
+          }
+          return {
+            ...storage,
+            items: [
+              ...storage.items,
+              {
+                instanceId:
+                  `${effect.itemId}:${s.world.elapsedHours}` as ItemInstanceId,
+                definitionId: effect.itemId as ItemId,
+                quantity: effect.quantity,
+                condition: 100,
+              },
+            ],
+          };
+        });
+        s = { ...s, inventory: { ...s.inventory, storages } };
+        break;
+      }
+      case "transport-set": {
+        const newTransport = {
+          instanceId: effect.instanceId as TransportInstanceId,
+          definitionId: effect.definitionId as TransportId,
+          mode: effect.mode as TransportState["mode"],
+          condition: effect.condition,
+          fuel: 0,
+          cargoItemIds: [] as ItemInstanceId[],
+        };
+        s = {
+          ...s,
+          transports: [...s.transports, newTransport],
+          party: {
+            ...s.party,
+            activeTransportId: effect.instanceId as TransportInstanceId,
+          },
+        };
         break;
       }
     }
